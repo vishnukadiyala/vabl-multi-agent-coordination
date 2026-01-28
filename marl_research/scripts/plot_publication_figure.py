@@ -112,11 +112,30 @@ def load_results(input_paths: List[str]) -> Dict[str, np.ndarray]:
 
     for pattern in input_paths:
         files = glob(pattern)
+        # If no glob matches, try as literal path
+        if not files:
+            if Path(pattern).exists():
+                files = [pattern]
         for fpath in files:
             with open(fpath, 'r') as f:
                 data = json.load(f)
 
             # Handle different data structures
+            # Check for ablation sweep format first
+            if isinstance(data, dict) and 'ablation' in data and 'results' in data:
+                # Ablation sweep format: {"ablation": "name", "param": "x", "results": [...]}
+                param_name = data.get('param', 'param')
+                for param_result in data['results']:
+                    param_value = param_result.get('param_value', 'unknown')
+                    key = f"{param_name}={param_value}"
+                    if key not in results:
+                        results[key] = []
+                    for seed_result in param_result.get('results', []):
+                        rewards = seed_result.get('rewards', [])
+                        if rewards:
+                            results[key].append(rewards)
+                continue
+
             if isinstance(data, list):
                 # List of experiments
                 for exp in data:
@@ -143,6 +162,21 @@ def load_results(input_paths: List[str]) -> Dict[str, np.ndarray]:
                             results[key] = []
                         results[key].append(exp['rewards'])
             elif isinstance(data, dict):
+                # Check if dict keys are algorithm names with reward arrays
+                # Format: {"VABL": [[ep1, ep2, ...], [ep1, ep2, ...]], "QMIX": [...]}
+                first_key = next(iter(data.keys()), None)
+                if first_key and isinstance(data.get(first_key), list):
+                    first_val = data[first_key]
+                    if first_val and isinstance(first_val[0], list):
+                        # This is algorithm -> list of seed reward arrays format
+                        for algo_name, seed_arrays in data.items():
+                            if algo_name not in results:
+                                results[algo_name] = []
+                            for seed_rewards in seed_arrays:
+                                if seed_rewards:
+                                    results[algo_name].append(seed_rewards)
+                        continue
+
                 # Single experiment dict
                 algo_name = data.get('algorithm', Path(fpath).stem)
                 if 'rewards' in data:

@@ -29,6 +29,62 @@ from marl_research.algorithms.registry import register_algorithm
 from marl_research.algorithms.vabl_networks import VABLAgent, CentralizedCritic
 
 
+class ValueNormalizer:
+    """Running mean and std for value normalization (PopArt-style).
+
+    This stabilizes training by normalizing value targets to have
+    zero mean and unit variance, preventing value function from
+    chasing moving targets during training.
+    """
+
+    def __init__(self, device: torch.device, clip: float = 10.0, epsilon: float = 1e-8):
+        self.device = device
+        self.clip = clip
+        self.epsilon = epsilon
+        self.mean = torch.zeros(1, device=device)
+        self.var = torch.ones(1, device=device)
+        self.count = 1e-4
+
+    def update(self, values: torch.Tensor) -> None:
+        """Update running statistics with new batch of values."""
+        if values.numel() == 0:
+            return
+
+        batch_mean = values.mean()
+        batch_var = values.var()
+        batch_count = values.numel()
+
+        # Welford's online algorithm for numerical stability
+        delta = batch_mean - self.mean
+        total_count = self.count + batch_count
+
+        self.mean = self.mean + delta * batch_count / total_count
+        m_a = self.var * self.count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta.pow(2) * self.count * batch_count / total_count
+        self.var = M2 / total_count
+        self.count = total_count
+
+    def normalize(self, values: torch.Tensor) -> torch.Tensor:
+        """Normalize values to zero mean and unit variance."""
+        std = torch.sqrt(self.var + self.epsilon)
+        normalized = (values - self.mean) / std
+        return torch.clamp(normalized, -self.clip, self.clip)
+
+    def denormalize(self, values: torch.Tensor) -> torch.Tensor:
+        """Convert normalized values back to original scale."""
+        std = torch.sqrt(self.var + self.epsilon)
+        return values * std + self.mean
+
+    def state_dict(self) -> Dict:
+        return {"mean": self.mean, "var": self.var, "count": self.count}
+
+    def load_state_dict(self, state_dict: Dict) -> None:
+        self.mean = state_dict["mean"]
+        self.var = state_dict["var"]
+        self.count = state_dict["count"]
+
+
 @register_algorithm("vabl")
 class VABL(BaseAlgorithm):
     """VABL: Variational Attention-based Belief Learning for Multi-Agent RL.
@@ -62,11 +118,18 @@ class VABL(BaseAlgorithm):
         self.min_aux_lambda = getattr(algo_config, 'min_aux_lambda', 0.05)
         self.stop_gradient_belief = getattr(algo_config, 'stop_gradient_belief', False)
 
+        # Value normalization for training stability (PopArt-style)
+        self.use_value_norm = getattr(algo_config, 'use_value_norm', True)
+        self.value_normalizer = ValueNormalizer(device=device)
+
     def _build_networks(self) -> None:
         """Build VABL agent networks and centralized critic with target network."""
         algo_config = self.config.algorithm
         obs_dim = self.obs_shape[0] if len(self.obs_shape) == 1 else self.obs_shape[-1]
         state_dim = self.state_shape[0] if len(self.state_shape) == 1 else self.state_shape[-1]
+
+        # Get orthogonal init setting from config (default True, like MAPPO)
+        use_orthogonal_init = getattr(algo_config, 'use_orthogonal_init', True)
 
         # Build VABL agent (shared parameters across all agents)
         self.agent = VABLAgent(
@@ -78,8 +141,9 @@ class VABL(BaseAlgorithm):
             attention_dim=algo_config.attention_dim,
             aux_hidden_dim=algo_config.aux_hidden_dim,
             attention_heads=getattr(algo_config, 'attention_heads', 4),
+            use_orthogonal_init=use_orthogonal_init,
         ).to(self.device)
-        
+
         # Ablation control
         self.agent.use_attention = getattr(algo_config, 'use_attention', True)
         self.use_aux_loss = getattr(algo_config, 'use_aux_loss', True)
@@ -89,6 +153,7 @@ class VABL(BaseAlgorithm):
             state_dim=state_dim,
             n_agents=self.n_agents,
             hidden_dim=algo_config.critic_hidden_dim,
+            use_orthogonal_init=use_orthogonal_init,
         ).to(self.device)
 
         # Target critic for stable value estimation
@@ -96,6 +161,7 @@ class VABL(BaseAlgorithm):
             state_dim=state_dim,
             n_agents=self.n_agents,
             hidden_dim=algo_config.critic_hidden_dim,
+            use_orthogonal_init=use_orthogonal_init,
         ).to(self.device)
         self.target_critic.load_state_dict(self.critic.state_dict())
 
@@ -104,29 +170,25 @@ class VABL(BaseAlgorithm):
             param.requires_grad = False
 
     def _build_optimizers(self) -> None:
-        """Build Adam optimizers for actor and critic with learning rate scheduling."""
+        """Build Adam optimizers for actor and critic (matching MAPPO setup)."""
         algo_config = self.config.algorithm
-        lr = self.config.training.lr
+        base_lr = self.config.training.lr
 
-        # Use lower learning rate for stability
-        actor_lr = lr * 0.3  # Reduce actor LR further for stability
-        critic_lr = lr * 0.5
+        # Use separate learning rates from config, or fall back to base_lr
+        actor_lr = getattr(algo_config, 'actor_lr', base_lr)
+        critic_lr = getattr(algo_config, 'critic_lr', base_lr)
 
-        # Separate optimizers for actor (agent) and critic
+        # Separate optimizers for actor (agent) and critic (matching MAPPO)
         self.actor_optimizer = torch.optim.Adam(
-            self.agent.parameters(), lr=actor_lr, eps=1e-5, weight_decay=1e-5
+            self.agent.parameters(), lr=actor_lr, eps=1e-5
         )
         self.critic_optimizer = torch.optim.Adam(
-            self.critic.parameters(), lr=critic_lr, eps=1e-5, weight_decay=1e-5
+            self.critic.parameters(), lr=critic_lr, eps=1e-5
         )
 
-        # More aggressive learning rate schedulers
-        self.actor_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            self.actor_optimizer, gamma=0.995
-        )
-        self.critic_scheduler = torch.optim.lr_scheduler.ExponentialLR(
-            self.critic_optimizer, gamma=0.995
-        )
+        # Optional LR schedulers (disabled by default for stability)
+        self.actor_scheduler = None
+        self.critic_scheduler = None
 
     def _soft_update_target(self, tau: float = 0.005) -> None:
         """Soft update target critic network."""
@@ -241,14 +303,17 @@ class VABL(BaseAlgorithm):
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Compute GAE returns and advantages using target critic for bootstrap.
 
+        Uses denormalized values for GAE computation when value normalization
+        is enabled, ensuring correct advantage estimation.
+
         Args:
             rewards: Episode rewards [batch, seq_len]
-            values: Value estimates [batch, seq_len]
+            values: Value estimates [batch, seq_len] (may be normalized)
             dones: Done flags [batch, seq_len]
             mask: Valid timestep mask [batch, seq_len]
 
         Returns:
-            returns: Computed returns [batch, seq_len]
+            returns: Computed returns [batch, seq_len] (in original scale)
             advantages: GAE advantages [batch, seq_len]
         """
         gamma = self.config.training.gamma
@@ -258,6 +323,12 @@ class VABL(BaseAlgorithm):
         returns = torch.zeros_like(rewards)
         advantages = torch.zeros_like(rewards)
 
+        # Denormalize values for GAE computation if using value normalization
+        if self.use_value_norm:
+            values_denorm = self.value_normalizer.denormalize(values)
+        else:
+            values_denorm = values
+
         # Compute returns and advantages using GAE
         last_gae = torch.zeros(batch_size, device=self.device)
         last_value = torch.zeros(batch_size, device=self.device)
@@ -266,12 +337,12 @@ class VABL(BaseAlgorithm):
             if t == seq_len - 1:
                 next_value = last_value
             else:
-                next_value = values[:, t + 1]
+                next_value = values_denorm[:, t + 1]
 
-            delta = rewards[:, t] + gamma * next_value * (1 - dones[:, t]) - values[:, t]
+            delta = rewards[:, t] + gamma * next_value * (1 - dones[:, t]) - values_denorm[:, t]
             last_gae = delta + gamma * gae_lambda * (1 - dones[:, t]) * last_gae
             advantages[:, t] = last_gae
-            returns[:, t] = advantages[:, t] + values[:, t]
+            returns[:, t] = advantages[:, t] + values_denorm[:, t]
 
         # Apply mask
         advantages = advantages * mask
@@ -464,11 +535,15 @@ class VABL(BaseAlgorithm):
         else:
             self.episodes_without_improvement += 1
 
-        # Anneal auxiliary loss after warmup
-        if self.training_step > self.warmup_steps:
+        # Anneal auxiliary loss after warmup (only if decay is enabled)
+        # aux_decay_rate < 1.0 enables decay, == 1.0 keeps constant
+        if self.training_step > self.warmup_steps and self.aux_decay_rate < 1.0:
             # Exponential decay of auxiliary loss (configurable)
+            # Decay towards min_aux_lambda but scaled by initial aux_lambda
+            initial_aux_lambda = self.config.algorithm.aux_lambda
+            min_lambda = self.min_aux_lambda * (initial_aux_lambda / 0.1) if initial_aux_lambda > 0 else 0
             self.aux_lambda_current = max(
-                self.min_aux_lambda,
+                min_lambda,
                 self.aux_lambda_current * self.aux_decay_rate
             )
 
@@ -530,6 +605,10 @@ class VABL(BaseAlgorithm):
                 rewards, old_values, dones, mask
             )
 
+            # Update value normalizer with new returns
+            if self.use_value_norm:
+                self.value_normalizer.update(returns[mask.bool()])
+
             # Normalize advantages (with clipping for stability)
             adv_mean = (advantages * mask).sum() / (mask.sum() + 1e-8)
             adv_std = ((advantages - adv_mean).pow(2) * mask).sum() / (mask.sum() + 1e-8)
@@ -538,11 +617,8 @@ class VABL(BaseAlgorithm):
             # More conservative advantage clipping
             advantages = torch.clamp(advantages, -5.0, 5.0)
 
-        # PPO training with multiple epochs (reduce epochs after warmup)
-        if self.training_step < self.warmup_steps:
-            n_epochs = getattr(algo_config, 'ppo_epochs', 3)
-        else:
-            n_epochs = max(1, getattr(algo_config, 'ppo_epochs', 3) - 1)
+        # PPO training with multiple epochs (matching MAPPO)
+        n_epochs = getattr(algo_config, 'ppo_epochs', 10)
 
         clip_param = algo_config.clip_param
         value_clip = getattr(algo_config, 'value_clip', 0.2)
@@ -585,19 +661,27 @@ class VABL(BaseAlgorithm):
 
             # Value Loss with clipping (PPO-style) - use current critic
             value_pred = self.critic(state_flat).view(batch_size, seq_len)
+
+            # Normalize returns for value loss when using value normalization
+            if self.use_value_norm:
+                returns_for_loss = self.value_normalizer.normalize(returns)
+            else:
+                returns_for_loss = returns
+
             value_pred_clipped = old_values + torch.clamp(
                 value_pred - old_values, -value_clip, value_clip
             )
-            value_loss1 = (value_pred - returns).pow(2)
-            value_loss2 = (value_pred_clipped - returns).pow(2)
+            value_loss1 = (value_pred - returns_for_loss).pow(2)
+            value_loss2 = (value_pred_clipped - returns_for_loss).pow(2)
             value_loss = 0.5 * torch.max(value_loss1, value_loss2) * mask
             value_loss = value_loss.sum() / (mask.sum() + 1e-8)
 
             # Entropy Loss with annealed coefficient
             entropy_loss = -(entropy * mask).sum() / (mask.sum() + 1e-8)
 
-            # Auxiliary Loss (only during warmup phase and first epoch)
-            if self.use_aux_loss and epoch == 0 and self.training_step < self.warmup_steps * 2:
+            # Auxiliary Loss - compute when enabled and aux_lambda > 0
+            # Only compute on first epoch to save computation
+            if self.use_aux_loss and epoch == 0 and self.aux_lambda_current > 0:
                 next_actions = torch.cat([actions[:, 1:], actions[:, -1:]], dim=1)
                 next_vis_masks = None
                 if visibility_masks is not None:
@@ -644,9 +728,10 @@ class VABL(BaseAlgorithm):
         # Soft update target critic
         self._soft_update_target(tau=0.005)
 
-        # Update learning rate schedulers
-        if hasattr(self, 'actor_scheduler'):
+        # Update learning rate schedulers (if configured)
+        if self.actor_scheduler is not None:
             self.actor_scheduler.step()
+        if self.critic_scheduler is not None:
             self.critic_scheduler.step()
 
         self.training_step += 1
@@ -681,6 +766,7 @@ class VABL(BaseAlgorithm):
                 "aux_lambda_current": self.aux_lambda_current,
                 "current_entropy_coef": self.current_entropy_coef,
                 "best_reward": self.best_reward,
+                "value_normalizer": self.value_normalizer.state_dict(),
             },
             path,
         )
@@ -705,6 +791,8 @@ class VABL(BaseAlgorithm):
             self.current_entropy_coef = checkpoint["current_entropy_coef"]
         if "best_reward" in checkpoint:
             self.best_reward = checkpoint["best_reward"]
+        if "value_normalizer" in checkpoint:
+            self.value_normalizer.load_state_dict(checkpoint["value_normalizer"])
 
     def get_metrics(self) -> Dict[str, float]:
         """Get current training metrics."""

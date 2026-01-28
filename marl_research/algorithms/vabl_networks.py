@@ -17,6 +17,29 @@ from typing import Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
+
+
+def orthogonal_init_(module: nn.Module, gain: float = np.sqrt(2)) -> None:
+    """Apply orthogonal initialization to a module's weights.
+
+    This is the standard initialization used by MAPPO and other PPO implementations
+    for improved training stability.
+
+    Args:
+        module: Neural network module to initialize
+        gain: Scaling factor for weights (sqrt(2) for ReLU layers, 0.01 for policy heads)
+    """
+    if isinstance(module, (nn.Linear, nn.Conv2d)):
+        nn.init.orthogonal_(module.weight, gain=gain)
+        if module.bias is not None:
+            nn.init.constant_(module.bias, 0)
+    elif isinstance(module, nn.GRUCell):
+        for name, param in module.named_parameters():
+            if 'weight' in name:
+                nn.init.orthogonal_(param, gain=gain)
+            elif 'bias' in name:
+                nn.init.constant_(param, 0)
 
 
 class VABLAgent(nn.Module):
@@ -36,6 +59,7 @@ class VABLAgent(nn.Module):
         attention_dim: int = 64,
         aux_hidden_dim: int = 64,
         attention_heads: int = 4,
+        use_orthogonal_init: bool = True,
     ):
         """Initialize VABL agent.
 
@@ -48,6 +72,7 @@ class VABLAgent(nn.Module):
             attention_dim: Dimension for attention (d_k)
             aux_hidden_dim: Hidden dimension for auxiliary predictor
             attention_heads: Number of attention heads for MHA
+            use_orthogonal_init: Whether to use orthogonal initialization (like MAPPO)
         """
         super().__init__()
         self.obs_dim = obs_dim
@@ -102,6 +127,41 @@ class VABLAgent(nn.Module):
             nn.ReLU(),
             nn.Linear(aux_hidden_dim, n_actions * self.n_teammates),
         )
+
+        # Apply orthogonal initialization (like MAPPO)
+        if use_orthogonal_init:
+            self._apply_orthogonal_init()
+
+    def _apply_orthogonal_init(self) -> None:
+        """Apply orthogonal initialization to all network layers."""
+        # Standard gain for ReLU layers
+        gain = np.sqrt(2)
+
+        # Feature encoder
+        for module in self.phi_net:
+            orthogonal_init_(module, gain=gain)
+
+        # Action encoder
+        for module in self.psi_net:
+            orthogonal_init_(module, gain=gain)
+
+        # Belief projection
+        orthogonal_init_(self.belief_proj, gain=gain)
+
+        # GRU
+        orthogonal_init_(self.gru, gain=1.0)
+
+        # Policy head - smaller gain for initial exploration
+        orthogonal_init_(self.policy_head, gain=0.01)
+
+        # Auxiliary head
+        for module in self.aux_head:
+            if isinstance(module, nn.Linear):
+                # Use smaller gain for last layer
+                if module.out_features == self.n_actions * self.n_teammates:
+                    orthogonal_init_(module, gain=0.01)
+                else:
+                    orthogonal_init_(module, gain=gain)
 
     def init_hidden(self, batch_size: int = 1) -> torch.Tensor:
         """Initialize belief state to zeros.
@@ -302,6 +362,7 @@ class CentralizedCritic(nn.Module):
         state_dim: int,
         n_agents: int,
         hidden_dim: int = 128,
+        use_orthogonal_init: bool = True,
     ):
         """Initialize centralized critic.
 
@@ -309,6 +370,7 @@ class CentralizedCritic(nn.Module):
             state_dim: Dimension of global state
             n_agents: Number of agents
             hidden_dim: Hidden dimension for critic network
+            use_orthogonal_init: Whether to use orthogonal initialization (like MAPPO)
         """
         super().__init__()
         self.state_dim = state_dim
@@ -321,6 +383,21 @@ class CentralizedCritic(nn.Module):
             nn.ReLU(),
             nn.Linear(hidden_dim, 1),
         )
+
+        # Apply orthogonal initialization (like MAPPO)
+        if use_orthogonal_init:
+            self._apply_orthogonal_init()
+
+    def _apply_orthogonal_init(self) -> None:
+        """Apply orthogonal initialization to critic network."""
+        gain = np.sqrt(2)
+        for i, module in enumerate(self.network):
+            if isinstance(module, nn.Linear):
+                # Last layer (value output) gets gain=1.0
+                if module.out_features == 1:
+                    orthogonal_init_(module, gain=1.0)
+                else:
+                    orthogonal_init_(module, gain=gain)
 
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """Compute value estimate from global state.
