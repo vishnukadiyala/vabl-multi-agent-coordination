@@ -55,7 +55,7 @@ ABLATIONS = {
     },
     'no_aux_loss': {
         'name': 'No Aux Loss',
-        'description': 'Disable auxiliary teammate prediction loss (λ=0)',
+        'description': 'Disable auxiliary teammate prediction loss (lambda=0)',
         'use_attention': True,
         'use_aux_loss': False,
         'aux_lambda': 0.0,
@@ -145,7 +145,8 @@ def create_ablation_config(env_name: str, ablation_config: Dict, layout: Optiona
     if env_name == 'overcooked':
         config['environment'] = {
             'name': 'overcooked',
-            'layout': layout or 'asymmetric_advantages',
+            'layout_name': layout or 'asymmetric_advantages',
+            'num_agents': 2,
             'horizon': 100,
         }
     else:
@@ -195,6 +196,7 @@ def run_ablation_experiment(
 
     buffer = ReplayBuffer(
         buffer_size=cfg.training.buffer_size,
+        episode_limit=env_info.episode_limit,
         n_agents=env_info.n_agents,
         obs_shape=env_info.obs_shape,
         state_shape=env_info.state_shape,
@@ -209,76 +211,77 @@ def run_ablation_experiment(
     shuffle_actions = ablation_config['shuffle_actions']
 
     for episode in range(n_episodes):
-        obs, state = env.reset()
+        reset_result = env.reset()
+        if len(reset_result) == 3:
+            obs, state, _ = reset_result
+        else:
+            obs, state = reset_result
         algorithm.init_hidden(batch_size=1)
         done = False
         episode_reward = 0
-        step = 0
         prev_actions = None
 
-        episode_buffer = {
-            'obs': [], 'state': [], 'actions': [], 'rewards': [],
-            'next_obs': [], 'next_state': [], 'dones': [],
-            'available_actions': [], 'visibility_masks': [],
-        }
-
         while not done:
-            available_actions = env.get_available_actions()
+            avail = env.get_available_actions()
 
             # Apply visibility stress test
             if visibility_prob < 1.0:
-                visibility_masks = (np.random.random((env_info.n_agents, env_info.n_agents - 1)) < visibility_prob).astype(np.float32)
+                vis_masks = (np.random.random((env_info.n_agents, env_info.n_agents - 1)) < visibility_prob).astype(np.float32)
             else:
-                visibility_masks = np.ones((env_info.n_agents, env_info.n_agents - 1), dtype=np.float32)
+                vis_masks = np.ones((env_info.n_agents, env_info.n_agents - 1), dtype=np.float32)
 
             # Shuffle teammate actions if ablation is enabled
             input_prev_actions = prev_actions
             if shuffle_actions and prev_actions is not None:
-                # Shuffle the teammate actions randomly
                 input_prev_actions = prev_actions.copy()
                 np.random.shuffle(input_prev_actions)
 
-            obs_t = torch.FloatTensor(obs).to(device)
-            avail_t = torch.FloatTensor(available_actions).to(device)
-            vis_t = torch.FloatTensor(visibility_masks).to(device)
+            obs_t = torch.FloatTensor(np.array(obs)).unsqueeze(0).to(device)
+            avail_t = torch.FloatTensor(np.array(avail)).unsqueeze(0).to(device)
+            vis_t = torch.FloatTensor(vis_masks).unsqueeze(0).to(device)
+
+            prev_actions_t = None
+            if input_prev_actions is not None:
+                prev_actions_t = torch.LongTensor(input_prev_actions).unsqueeze(0).to(device)
 
             with torch.no_grad():
-                actions, _ = algorithm.select_actions(
-                    obs_t, avail_t,
-                    prev_actions=input_prev_actions,
+                actions = algorithm.select_actions(
+                    obs_t, avail_t, explore=True,
+                    prev_actions=prev_actions_t,
                     visibility_masks=vis_t
                 )
 
-            actions_np = actions.cpu().numpy()
-            next_obs, next_state, reward, done, info = env.step(actions_np)
+            actions_np = actions.squeeze(0).cpu().numpy()
+            next_obs, next_state, reward, done, info = env.step(actions_np.tolist())
+            next_avail = env.get_available_actions()
 
-            episode_buffer['obs'].append(obs)
-            episode_buffer['state'].append(state)
-            episode_buffer['actions'].append(actions_np)
-            episode_buffer['rewards'].append(reward)
-            episode_buffer['next_obs'].append(next_obs)
-            episode_buffer['next_state'].append(next_state)
-            episode_buffer['dones'].append(done)
-            episode_buffer['available_actions'].append(available_actions)
-            episode_buffer['visibility_masks'].append(visibility_masks)
+            # Store transition
+            buffer.add_transition(
+                obs=np.array(obs),
+                state=np.array(state),
+                actions=actions_np,
+                reward=reward,
+                done=done,
+                next_obs=np.array(next_obs),
+                next_state=np.array(next_state),
+                available_actions=np.array(avail),
+                next_available_actions=np.array(next_avail),
+                visibility_masks=vis_masks,
+            )
 
             episode_reward += reward
-            obs = next_obs
-            state = next_state
             prev_actions = actions_np
-            step += 1
+            obs, state = next_obs, next_state
 
         rewards.append(episode_reward)
 
-        # Add episode to buffer and train
-        if len(episode_buffer['obs']) > 0:
-            buffer.add_episode(episode_buffer)
-
-            if buffer.can_sample(cfg.training.batch_size):
-                batch = buffer.sample(cfg.training.batch_size)
-                metrics = algorithm.train_step(batch)
-                aux_losses.append(metrics.get('aux_loss', 0))
-                aux_accs.append(metrics.get('aux_accuracy', 0))
+        # Train if buffer has enough data
+        if buffer.can_sample(batch_size=1):
+            batch = buffer.sample(batch_size=1)
+            metrics = algorithm.train_step(batch)
+            aux_losses.append(metrics.get('aux_loss', 0))
+            aux_accs.append(metrics.get('aux_accuracy', 0))
+            algorithm.update_on_episode_end(episode_reward)
 
         if (episode + 1) % 10 == 0:
             avg_reward = np.mean(rewards[-10:])
