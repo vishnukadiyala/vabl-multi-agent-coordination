@@ -1,0 +1,7 @@
+# Simple Coordination Environment for Testing
+name: "simple"
+n_agents: 3
+obs_dim: 16
+n_actions: 5
+episode_limit: 50
+visibility_prob: 0.7  # Probability each agent can see each other agent

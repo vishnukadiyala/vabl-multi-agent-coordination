@@ -1,0 +1,24 @@
+# MAPPO (Multi-Agent PPO) Algorithm Configuration
+# Based on "The Surprising Effectiveness of PPO in Cooperative Multi-Agent Games"
+
+name: "mappo"
+
+# Network architecture
+hidden_dim: 64
+use_rnn: true
+rnn_hidden_dim: 64
+
+# PPO hyperparameters
+clip_param: 0.2
+ppo_epochs: 10
+value_loss_coef: 0.5
+entropy_coef: 0.01
+gae_lambda: 0.95
+
+# Separate learning rates
+actor_lr: 0.0005
+critic_lr: 0.0005
+
+# Shared parameters
+share_policy: true
+use_centralized_v: true

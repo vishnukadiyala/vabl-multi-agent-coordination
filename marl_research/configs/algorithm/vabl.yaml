@@ -1,0 +1,36 @@
+# VABL (Variational Attention-based Belief Learning) Algorithm Configuration
+# Based on ICML 2026 paper: "Implicit Coordination via Attention-Driven Latent
+# Belief Representations in Partially Observable Environments"
+
+name: "vabl"
+
+# Network architecture (from paper Section 5.6)
+embed_dim: 64        # d_e for action/obs embeddings
+hidden_dim: 128      # d_h for GRU/belief state
+attention_dim: 64    # d_k for attention
+
+# Auxiliary loss (reduced for stability)
+aux_lambda: 0.1      # lambda weight for auxiliary loss (internally scaled down further)
+aux_hidden_dim: 64   # Hidden dim in aux predictor MLP
+
+# Critic (centralized, for PPO)
+critic_hidden_dim: 128
+
+# PPO hyperparameters (tuned for stability)
+clip_param: 0.2      # PPO clip parameter
+ppo_epochs: 3        # Number of PPO epochs per batch (reduced for stability)
+value_clip: 0.2      # Value function clipping
+value_loss_coef: 0.5
+entropy_coef: 0.01   # Entropy bonus for exploration
+gae_lambda: 0.95     # GAE lambda for advantage estimation
+
+# Ablation parameters (for sweep experiments)
+warmup_steps: 50             # Steps before starting to anneal auxiliary loss
+attention_heads: 4           # Number of attention heads in MHA
+stop_gradient_belief: false  # If true, detach beliefs in auxiliary loss (ablation)
+aux_decay_rate: 0.995        # Exponential decay rate for aux lambda
+min_aux_lambda: 0.05         # Minimum auxiliary loss weight
+
+# Ablation toggles
+use_attention: true          # If false, use mean pooling instead of attention
+use_aux_loss: true           # If false, disable auxiliary loss entirely

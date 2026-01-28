@@ -1,0 +1,18 @@
+# QPLEX (Duplex Dueling Multi-Agent Q-Learning) Algorithm Configuration
+# Based on "QPLEX: Duplex Dueling Multi-Agent Q-Learning" (Wang et al., 2021)
+
+name: "qplex"
+
+# Agent network
+agent_network:
+  hidden_dim: 64
+  rnn_hidden_dim: 64
+
+# Mixing network
+mixing_network:
+  embed_dim: 32
+  hypernet_hidden_dim: 64
+  n_attention_heads: 4
+
+# Double Q-learning
+double_q: true

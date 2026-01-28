@@ -1,0 +1,15 @@
+# CommNet (Communication Neural Network) Algorithm Configuration
+# Based on "Learning Multiagent Communication with Backpropagation" (Sukhbaatar et al., 2016)
+
+name: "commnet"
+
+# Network architecture
+hidden_dim: 64
+comm_rounds: 2  # Number of communication rounds
+
+# PPO hyperparameters (for training)
+clip_param: 0.2
+ppo_epochs: 4
+value_loss_coef: 0.5
+entropy_coef: 0.01
+gae_lambda: 0.95

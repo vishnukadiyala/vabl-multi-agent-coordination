@@ -1,0 +1,16 @@
+# QMIX Algorithm Configuration
+name: "qmix"
+
+# Network architecture
+agent_network:
+  hidden_dim: 64
+  rnn_hidden_dim: 64
+  use_rnn: true
+
+# Mixing network
+mixing_network:
+  embed_dim: 32
+  hypernet_hidden_dim: 64
+
+# Training specific
+double_q: true
