@@ -104,6 +104,7 @@ nul
 # PDF files
 *.pdf
 
+*.md
 # Temporary/debug scripts at root level
 /debug_*.py
 /test_*.py
