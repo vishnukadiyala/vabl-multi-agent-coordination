@@ -1,12 +1,5 @@
 """VABL (Variational Attention-based Belief Learning) Algorithm Implementation.
 
-Training objective (Eq. 11): max J(theta) - lambda * sum L_aux
-
-Auxiliary loss (Eq. 10):
-L_aux = E[sum_{j!=i} m^{i<-j}_{t+1} * CE(pi_hat(.|b_t), a^j_{t+1})]
-- Predict teammate j's action at t+1 from belief at t
-- Only supervise for visible teammates (masked by m^{i<-j}_{t+1})
-
 STABILITY IMPROVEMENTS (v2):
 - Auxiliary loss annealing (disable after warmup phase)
 - Target critic network with soft updates
@@ -142,6 +135,7 @@ class VABL(BaseAlgorithm):
             aux_hidden_dim=algo_config.aux_hidden_dim,
             attention_heads=getattr(algo_config, 'attention_heads', 4),
             use_orthogonal_init=use_orthogonal_init,
+            use_identity_encoding=getattr(algo_config, 'use_identity_encoding', True),
         ).to(self.device)
 
         # Ablation control
@@ -250,9 +244,10 @@ class VABL(BaseAlgorithm):
 
             # Get previous teammate actions (excluding agent i's own action)
             prev_teammate_actions = None
+            teammate_indices = [j for j in range(self.n_agents) if j != i]
+            teammate_idx_tensor = torch.tensor(teammate_indices, device=self.device)
             if prev_actions is not None:
                 # Build one-hot encoding of teammate actions
-                teammate_indices = [j for j in range(self.n_agents) if j != i]
                 prev_teammate_actions = torch.zeros(
                     batch_size, self.n_agents - 1, self.n_actions, device=self.device
                 )
@@ -268,7 +263,8 @@ class VABL(BaseAlgorithm):
 
             # Forward pass through VABL agent
             action_logits, new_belief, _, _ = self.agent(
-                obs_i, belief_i, prev_teammate_actions, vis_mask_i
+                obs_i, belief_i, prev_teammate_actions, vis_mask_i,
+                teammate_indices=teammate_idx_tensor,
             )
 
             # Mask unavailable actions
@@ -477,8 +473,9 @@ class VABL(BaseAlgorithm):
                 belief_i = hidden_states_list[i]
 
                 prev_teammate_actions = None
+                teammate_indices = [j for j in range(self.n_agents) if j != i]
+                teammate_idx_tensor = torch.tensor(teammate_indices, device=self.device)
                 if prev_actions_t is not None:
-                    teammate_indices = [j for j in range(self.n_agents) if j != i]
                     prev_teammate_actions = torch.zeros(
                         batch_size, self.n_agents - 1, self.n_actions, device=self.device
                     )
@@ -492,7 +489,8 @@ class VABL(BaseAlgorithm):
                     vis_mask_i = vis_masks_t[:, i, :]
 
                 action_logits, new_belief, _, _ = self.agent(
-                    obs_i, belief_i, prev_teammate_actions, vis_mask_i
+                    obs_i, belief_i, prev_teammate_actions, vis_mask_i,
+                    teammate_indices=teammate_idx_tensor,
                 )
 
                 if available_actions is not None:

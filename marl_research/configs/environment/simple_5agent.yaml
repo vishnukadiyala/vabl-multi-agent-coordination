@@ -1,0 +1,8 @@
+# 5-Agent Simple Coordination Environment
+# Tests selective attention with more teammates (addresses 2-agent triviality concern)
+name: "simple"
+n_agents: 5
+obs_dim: 16
+n_actions: 5
+episode_limit: 50
+visibility_prob: 0.7  # Probability each agent can see each other agent

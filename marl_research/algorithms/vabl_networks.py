@@ -60,6 +60,7 @@ class VABLAgent(nn.Module):
         aux_hidden_dim: int = 64,
         attention_heads: int = 4,
         use_orthogonal_init: bool = True,
+        use_identity_encoding: bool = True,
     ):
         """Initialize VABL agent.
 
@@ -73,6 +74,9 @@ class VABLAgent(nn.Module):
             aux_hidden_dim: Hidden dimension for auxiliary predictor
             attention_heads: Number of attention heads for MHA
             use_orthogonal_init: Whether to use orthogonal initialization (like MAPPO)
+            use_identity_encoding: Whether to add teammate identity embeddings to
+                action encodings, allowing the attention mechanism to distinguish
+                teammates even when they take the same action.
         """
         super().__init__()
         self.obs_dim = obs_dim
@@ -83,6 +87,7 @@ class VABLAgent(nn.Module):
         self.attention_dim = attention_dim
         self.attention_heads = attention_heads
         self.n_teammates = n_agents - 1
+        self.use_identity_encoding = use_identity_encoding
 
         self.use_attention = True
 
@@ -101,6 +106,11 @@ class VABLAgent(nn.Module):
             nn.Linear(embed_dim, embed_dim),
             nn.ReLU(),
         )
+
+        # Teammate identity embedding: maps agent index to d_e
+        # Allows attention to distinguish teammates even with identical actions
+        if self.use_identity_encoding:
+            self.identity_embedding = nn.Embedding(n_agents, embed_dim)
 
         # Multi-Head Attention (Eq. 6-7 upgraded)
         # Project belief (d_h) to query (d_e)
@@ -151,6 +161,10 @@ class VABLAgent(nn.Module):
         # GRU
         orthogonal_init_(self.gru, gain=1.0)
 
+        # Identity embedding (small init to not dominate action encoding early)
+        if self.use_identity_encoding:
+            nn.init.normal_(self.identity_embedding.weight, mean=0.0, std=0.01)
+
         # Policy head - smaller gain for initial exploration
         orthogonal_init_(self.policy_head, gain=0.01)
 
@@ -185,11 +199,17 @@ class VABLAgent(nn.Module):
         """
         return self.phi_net(obs)
 
-    def encode_actions(self, actions: torch.Tensor) -> torch.Tensor:
-        """Encode actions using psi network.
+    def encode_actions(
+        self,
+        actions: torch.Tensor,
+        teammate_indices: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Encode actions using psi network, optionally adding identity embeddings.
 
         Args:
             actions: One-hot encoded actions [batch, n_teammates, n_actions]
+            teammate_indices: Global agent indices of teammates [n_teammates]
+                              e.g., for agent 0 with 3 total agents: tensor([1, 2])
 
         Returns:
             Encoded actions [batch, n_teammates, embed_dim]
@@ -201,6 +221,13 @@ class VABLAgent(nn.Module):
         actions_flat = actions.view(batch_size * n_teammates, self.n_actions)
         encoded_flat = self.psi_net(actions_flat)
         encoded = encoded_flat.view(batch_size, n_teammates, self.embed_dim)
+
+        # Add teammate identity embeddings so attention can distinguish teammates
+        if self.use_identity_encoding and teammate_indices is not None:
+            # teammate_indices: [n_teammates] -> identity_emb: [n_teammates, embed_dim]
+            identity_emb = self.identity_embedding(teammate_indices)
+            # Broadcast across batch: [1, n_teammates, embed_dim]
+            encoded = encoded + identity_emb.unsqueeze(0)
 
         return encoded
 
@@ -293,6 +320,7 @@ class VABLAgent(nn.Module):
         prev_belief: torch.Tensor,
         prev_teammate_actions: Optional[torch.Tensor] = None,
         visibility_mask: Optional[torch.Tensor] = None,
+        teammate_indices: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass implementing Algorithm 1 from the paper.
 
@@ -310,6 +338,8 @@ class VABLAgent(nn.Module):
                                    If None, uses zero context (first timestep)
             visibility_mask: Which teammates are visible [batch, n_teammates]
                             If None, assumes all visible
+            teammate_indices: Global agent indices of teammates [n_teammates]
+                              Used for identity encoding so attention can distinguish teammates
 
         Returns:
             action_logits: Action logits [batch, n_actions]
@@ -325,8 +355,10 @@ class VABLAgent(nn.Module):
 
         # Steps 2-3: Encode teammate actions and compute attention context
         if prev_teammate_actions is not None:
-            # Encode teammate actions
-            H_team = self.encode_actions(prev_teammate_actions)  # [batch, n_teammates, embed_dim]
+            # Encode teammate actions (with identity if enabled)
+            H_team = self.encode_actions(
+                prev_teammate_actions, teammate_indices
+            )  # [batch, n_teammates, embed_dim]
 
             # Compute attention context
             context, attention_weights = self.attention(

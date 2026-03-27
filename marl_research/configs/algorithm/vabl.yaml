@@ -42,3 +42,4 @@ use_aux_loss: true           # If false, disable auxiliary loss entirely
 # Training stability
 use_value_norm: true         # PopArt-style value normalization for stability
 use_orthogonal_init: true    # Orthogonal weight initialization (like MAPPO)
+use_identity_encoding: true  # Add teammate identity embeddings to attention keys/values

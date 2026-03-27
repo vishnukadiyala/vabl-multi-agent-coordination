@@ -304,7 +304,7 @@ def main():
     parser.add_argument('--env', type=str, default='simple', choices=['simple', 'overcooked'])
     parser.add_argument('--layout', type=str, default='asymmetric_advantages')
     parser.add_argument('--episodes', type=int, default=100)
-    parser.add_argument('--seeds', type=int, default=3)
+    parser.add_argument('--seeds', type=int, default=5)
     parser.add_argument('--device', type=str, default='cpu', choices=['auto', 'cuda', 'cpu'])
     parser.add_argument('--ablation', type=str, default=None,
                         choices=list(ABLATIONS.keys()),

@@ -29,19 +29,23 @@ def main():
             device_arg = f"--device {sys.argv[idx + 1]}"
 
     # Configuration for long run:
-    # 5000 episodes to ensure convergence in Overcooked
+    # 12500 episodes × 400 steps = 5M timesteps, matching JaxMARL/OvercookedV2 literature
     # 5 seeds for statistical significance (standard for ICML papers)
-    episodes = 5000
+    episodes = 12500
     seeds = 5
 
-    cmd_proposed = f"{sys.executable} -m marl_research.scripts.run_vabl_experiments --full --algorithm vabl --aux_lambda 0.5 --exp_name proposed_long --seeds {seeds} --episodes {episodes} {device_arg}"
+    cmd_proposed = f"{sys.executable} -m marl_research.scripts.run_vabl_experiments --full --algorithm vabl --aux_lambda 0.05 --exp_name proposed_long --seeds {seeds} --episodes {episodes} {device_arg}"
+    cmd_mappo = f"{sys.executable} -m marl_research.scripts.run_vabl_experiments --full --algorithm mappo --exp_name mappo_long --seeds {seeds} --episodes {episodes} {device_arg}"
     cmd_qmix = f"{sys.executable} -m marl_research.scripts.run_vabl_experiments --full --algorithm qmix --exp_name qmix_long --seeds {seeds} --episodes {episodes} {device_arg}"
 
-    print(f"\n--- Launching Proposed Method (VABL) [Episodes: {episodes}, Seeds: {seeds}] ---")
+    print(f"\n--- Launching Proposed Method (VABL) [Episodes: {episodes}, Seeds: {seeds}, ~5M steps] ---")
     p1 = subprocess.Popen(cmd_proposed, shell=True, cwd=str(project_root))
 
-    print(f"--- Launching Baseline (QMIX) [Episodes: {episodes}, Seeds: {seeds}] ---")
-    p2 = subprocess.Popen(cmd_qmix, shell=True, cwd=str(project_root))
+    print(f"--- Launching Baseline (MAPPO) [Episodes: {episodes}, Seeds: {seeds}, ~5M steps] ---")
+    p2 = subprocess.Popen(cmd_mappo, shell=True, cwd=str(project_root))
+
+    print(f"--- Launching Baseline (QMIX) [Episodes: {episodes}, Seeds: {seeds}, ~5M steps] ---")
+    p3 = subprocess.Popen(cmd_qmix, shell=True, cwd=str(project_root))
 
     print("\nExperiments likely running in background. You can monitor progress by checking CPU/GPU usage or 'results/' folder.")
     print("Waiting for completion...")
@@ -49,10 +53,12 @@ def main():
     try:
         p1.wait()
         p2.wait()
+        p3.wait()
     except KeyboardInterrupt:
         print("\nInterrupted by user. Terminating processes...")
         p1.terminate()
         p2.terminate()
+        p3.terminate()
         return
 
     print("\nExperiments completed!")
