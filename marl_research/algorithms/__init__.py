@@ -11,6 +11,8 @@ from marl_research.algorithms.mappo import MAPPO
 from marl_research.algorithms.qplex import QPLEX
 from marl_research.algorithms.commnet import CommNet
 from marl_research.algorithms.maven import MAVEN
+from marl_research.algorithms.tarmac import TarMAC
+from marl_research.algorithms.aerial import AERIAL
 
 __all__ = [
     "BaseAlgorithm",
@@ -23,4 +25,6 @@ __all__ = [
     "QPLEX",
     "CommNet",
     "MAVEN",
+    "TarMAC",
+    "AERIAL",
 ]

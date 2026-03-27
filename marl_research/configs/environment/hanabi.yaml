@@ -1,0 +1,19 @@
+# Hanabi Environment Configuration
+# Cooperative card game with strong partial observability.
+# Each agent can see other players' cards but not their own.
+# Gold standard for testing belief learning in MARL.
+name: "hanabi"
+
+# Game settings
+num_players: 2          # Number of players (2-5 supported)
+colors: 5               # Number of card colors (standard: 5)
+rank: 5                 # Number of card ranks (standard: 5)
+hand_size: 5            # Cards per hand (5 for 2-3 players, 4 for 4-5)
+max_information_tokens: 8  # Hint tokens available
+max_life_tokens: 3      # Mistakes allowed before game over
+
+# Observation settings
+observation_type: 1     # 0: minimal, 1: card knowledge (recommended)
+
+# Episode settings
+episode_limit: 80       # Max turns per episode (standard 2p game ~40 turns)

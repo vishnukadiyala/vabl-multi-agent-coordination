@@ -21,4 +21,14 @@ try:
 except ImportError:
     MPEEnv = None  # pettingzoo not installed
 
+try:
+    from marl_research.environments.overcooked_ego_env import OvercookedEgoEnv
+except ImportError:
+    OvercookedEgoEnv = None  # overcooked-ai not installed
+
+try:
+    from marl_research.environments.hanabi_env import HanabiEnv
+except ImportError:
+    HanabiEnv = None  # hanabi_learning_environment not installed
+
 __all__ = ["BaseMAEnv", "ENV_REGISTRY", "register_env", "make_env", "SimpleCoordinationEnv"]
