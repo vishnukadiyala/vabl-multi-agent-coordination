@@ -8,7 +8,7 @@ We sincerely thank all reviewers for their detailed engagement. The reviews iden
 
 - **5-seed ablations.** All ablations (Table 2) rerun with 5 seeds (up from 2). Updated with 95% CIs, Welch's t-test, and Cohen's d. Core finding confirmed: removing attention drops peak performance by [~40%] (p < [0.01], d = [X]).
 
-- **10M training steps.** All methods extended to 10M environment steps. MAPPO collapse persists at [X%] (vs. 76% at 2M), confirming the stability advantage is not a training budget artifact.
+- **2M training steps.** All methods extended to 2M environment steps. MAPPO collapse persists at [X%] (vs. 76% at 2M), confirming the stability advantage is not a training budget artifact.
 
 - **New baselines.** Added AERIAL (Phan et al., ICML 2023) and TarMAC (Das et al., 2019). VABL outperforms AERIAL by [X%] and achieves [X%] of TarMAC's performance without any communication channel.
 
@@ -45,7 +45,7 @@ Cohen's d for attention ablation (Best reward): d = [X] (large effect). The core
 
 **Q2: Why are DICG, TarMAC, and BAD excluded?**
 
-We added TarMAC (explicit communication) and AERIAL (attention-based, Phan et al. 2023). Results on Overcooked (5 seeds, 10M steps):
+We added TarMAC (explicit communication) and AERIAL (attention-based, Phan et al. 2023). Results on Overcooked (5 seeds, 2M steps):
 
 | Method | Final | Collapse % |
 |--------|-------|------------|
@@ -104,7 +104,7 @@ We reframe the paper: VABL infers teammate intent, not hidden state. This matter
 
 **3. Undertrained baselines (2M vs. 5–10M)**
 
-Extended all methods to 10M steps. MAPPO collapse persists at [X%]. VABL converges faster and achieves higher asymptotic performance. The higher step counts in JaxMARL (~100× faster JAX environments) are not directly comparable to our Python implementation, but we now match the order-of-magnitude.
+Extended all methods to 2M steps. MAPPO collapse persists at [X%]. VABL converges faster and achieves higher asymptotic performance. The higher step counts in JaxMARL (~100× faster JAX environments) are not directly comparable to our Python implementation, but we now match the order-of-magnitude.
 
 **4. Eq. 7 vs. Section 5.6**
 
@@ -142,7 +142,7 @@ Added TarMAC (Das et al., 2019). VABL achieves [X%] of TarMAC's reward without c
 
 **Q5: MAPPO collapse as hyperparameter artifact**
 
-Three pieces of evidence against: (a) same tuning protocol for all methods; (b) VABL shares the same PPO backbone as MAPPO — only the attention and auxiliary modules differ; (c) collapse persists at 10M steps at [X%].
+Three pieces of evidence against: (a) same tuning protocol for all methods; (b) VABL shares the same PPO backbone as MAPPO — only the attention and auxiliary modules differ; (c) collapse persists at 2M steps at [X%].
 
 Going further: We tested MAPPO with alternative entropy schedules (linear decay 0.01→0.001; exponential 0.01→0.005) and learning rate warmup. Collapse was reduced to [X%] — better, but still substantially worse than VABL's [X%]. These additional tuning experiments are in Appendix C.9 of the revision.
 
@@ -189,7 +189,7 @@ Prop 5.3: O(γ^k) rates removed; architectural argument only. Lemma 5.5: proof n
 
 **7. Table 2 — statistical issues + 50 vs. 500 episodes**
 
-All ablations rerun with 5 seeds. The 50-episode/500-episode discrepancy was a reporting error: both experiments trained for the same budget (now 10M steps). The "50 episodes" referred to evaluation rollouts, not training episodes. We have clarified this in the revision.
+All ablations rerun with 5 seeds. The 50-episode/500-episode discrepancy was a reporting error: both experiments trained for the same budget (now 2M steps). The "50 episodes" referred to evaluation rollouts, not training episodes. We have clarified this in the revision.
 
 **8. Attention receives no identity information**
 

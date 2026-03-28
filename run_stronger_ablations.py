@@ -97,7 +97,7 @@ ABLATION_CONFIGS = {
 # Experiment parameters
 # ---------------------------------------------------------------------------
 N_SEEDS = 5
-N_EPISODES = 500
+N_EPISODES = 5000
 ENV_NAME = "overcooked"
 LAYOUT = "asymmetric_advantages"
 DEVICE_SELECTION = "auto"

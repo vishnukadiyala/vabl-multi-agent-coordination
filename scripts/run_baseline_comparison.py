@@ -187,7 +187,7 @@ def run_single_seed(config_dict, n_episodes, seed, device):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", type=int, default=500)
+    parser.add_argument("--episodes", type=int, default=5000)
     parser.add_argument("--seeds", type=int, default=5)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--env", default="overcooked", choices=["overcooked", "overcooked_ego"])
