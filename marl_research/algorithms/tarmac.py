@@ -157,6 +157,8 @@ class TarMACModule(nn.Module):
             h_flat = h.view(batch_size * self.n_agents, self.hidden_dim)
             c_flat = attended_messages.view(batch_size * self.n_agents, self.message_dim)
             h_flat = self.gru_cells[r](c_flat, h_flat)
+            # Protect against NaN in GRU output
+            h_flat = torch.nan_to_num(h_flat, nan=0.0)
             h = h_flat.view(batch_size, self.n_agents, self.hidden_dim)
 
         # Policy output from final hidden state
@@ -292,6 +294,10 @@ class TarMAC(BaseAlgorithm):
 
         if explore:
             probs = F.softmax(logits, dim=-1)
+            # Protect against NaN/zero probabilities
+            probs = torch.nan_to_num(probs, nan=1.0 / self.n_actions)
+            probs = probs.clamp(min=1e-8)
+            probs = probs / probs.sum(dim=-1, keepdim=True)
             batch_size = observations.shape[0]
             actions = torch.zeros(
                 batch_size, self.n_agents, dtype=torch.long, device=self.device
