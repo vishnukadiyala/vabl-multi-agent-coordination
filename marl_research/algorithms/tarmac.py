@@ -130,6 +130,9 @@ class TarMACModule(nn.Module):
             # [batch, n_agents, n_agents]
             attn_scores = torch.bmm(queries, keys.transpose(1, 2)) / scale
 
+            # Clamp scores to prevent numerical instability in softmax
+            attn_scores = torch.clamp(attn_scores, -20.0, 20.0)
+
             # Mask self-attention: agent should not attend to its own message
             self_mask = torch.eye(self.n_agents, device=obs.device).unsqueeze(0)
             attn_scores = attn_scores.masked_fill(self_mask.bool(), float("-inf"))
@@ -137,6 +140,8 @@ class TarMACModule(nn.Module):
             # Handle edge case: single agent (all -inf row)
             if self.n_agents > 1:
                 attn_weights = F.softmax(attn_scores, dim=-1)  # [batch, n_agents, n_agents]
+                # Replace any NaN from softmax (can happen if all -inf)
+                attn_weights = torch.nan_to_num(attn_weights, nan=0.0)
             else:
                 attn_weights = torch.zeros_like(attn_scores)
 
@@ -454,6 +459,8 @@ class TarMAC(BaseAlgorithm):
 
             # Actor update
             actor_loss = policy_loss + entropy_coef * entropy_loss
+            if torch.isnan(actor_loss) or torch.isinf(actor_loss):
+                continue  # Skip this epoch if loss is NaN
             self.actor_optimizer.zero_grad()
             actor_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.tarmac.parameters(), max_grad_norm)
@@ -461,6 +468,8 @@ class TarMAC(BaseAlgorithm):
 
             # Critic update
             critic_loss = value_loss_coef * value_loss
+            if torch.isnan(critic_loss) or torch.isinf(critic_loss):
+                continue
             self.critic_optimizer.zero_grad()
             critic_loss.backward()
             torch.nn.utils.clip_grad_norm_(self.critic.parameters(), max_grad_norm)
