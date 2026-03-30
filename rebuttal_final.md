@@ -66,29 +66,34 @@ We thank Reviewer iBYE for the rigorous critique. Every concern was valid.
 
 **1. Proof errors — all corrected:**
 
-- **Lemma 5.5:** Proof now in Appendix B.3. Under the standard Dec-POMDP conditional independence assumption (a^j ⊥ b^i | s), the chain rule gives: I(b;a,s) = I(b;s) + I(b;a|s) = I(b;s) (since I(b;a|s)=0). Combined with I(b;a,s) ≥ I(b;a) > 0, this yields I(b;s) > 0.
+- **Lemma 5.5 (missing proof):** We provide the full argument here. Assume the standard Dec-POMDP conditional independence: agent j's action is independent of agent i's belief given the state, i.e., a^j_{t+1} ⊥ b^i_t | s_{t+1}. This holds because without communication, agents' private information is conditionally independent given the state. By the MI chain rule applied two ways:
 
-- **Proposition B.2:** Restated as expressivity result with proper conditioning on b on both sides. Limitation about permutation invariance added.
+  I(b; a, s) = I(b; s) + I(b; a|s) = I(b; s) + 0 = I(b; s)
+  I(b; a, s) = I(b; a) + I(b; s|a) ≥ I(b; a) > 0
 
-- **Proposition 5.3:** Convergence rates removed. Restated as signal-latency argument (1-step vs multi-step).
+  Combining: I(b; s) ≥ I(b; a) > 0. Therefore any belief predictive of teammate actions must encode state-relevant information. QED.
+
+- **Proposition B.2 Step 1:** The reviewer correctly noted that supremum over the attention family does not imply anything about learned weights. We now state this explicitly: "This is a representational capacity result. It does not guarantee that a specific learned θ achieves the supremum." The revised proposition compares sup_{θ∈Θ_attn} I(A; c_attn | b) ≥ sup_{θ∈Θ_mean} I(A; c_mean), conditioning on fixed b on both sides so the comparison is between deterministic functions of A.
+
+- **Proposition B.2 Step 2:** The reviewer identified an unjustified switch from joint action A to subset A_S and from conditional to unconditional MI. We now explicitly state the relevance structure assumption: I(a^k; s | A_S) = 0 for k ∉ S, under which the argument holds. We also add a limitation: since attention computes a weighted sum, it cannot distinguish permutations of actions among equally-weighted teammates.
+
+- **Proposition 5.3:** O(γ^k) convergence rates removed entirely. The proposition is now labeled "Informal" and stated as an architectural observation: VABL receives teammate action changes at 1-step latency via the attention context, while RNN must infer changes through multi-step observation effects. We explicitly state: "We do not claim formal convergence rates, as deriving these for nonlinear GRU dynamics would require spectral analysis under specific regularity conditions."
 
 **2. Overcooked is fully observable**
 
-We fully acknowledge this. Two new pieces of evidence with genuine partial observability:
+We fully acknowledge this. We reframe: VABL infers teammate *intent* from observable actions, not hidden state. New evidence with genuine partial observability:
 
 (a) **5-agent Simple Coordination** (stochastic visibility p=0.7): VABL Best 95.7±3.3 vs MAPPO 84.0±10.4.
 
 (b) **Ego-centric Overcooked** (view radius 3, 91% cells masked): Implemented following OvercookedV2. Training in progress.
 
-We reframe: VABL infers teammate *intent* from observable actions, not hidden state. This matters even under full state observability.
-
 **3. Undertrained baselines**
 
-At 5M environment steps (partial results, seed 0), MAPPO exhibits **100% collapse** (peak reward 503, final reward 0). This confirms the stability problem is fundamental and persists well beyond the 2M-step budget.
+At 10M environment steps (seed 0, 25,000 episodes), MAPPO exhibits **100% collapse** (peak reward 503, final reward 0). This confirms the stability problem is fundamental, not a training budget artifact.
 
-**4. Eq. 7 vs. Section 5.6:** Multi-head attention now presented directly.
+**4. Eq. 7 vs. Section 5.6:** Equation 7 now presents multi-head attention directly with h=4 heads and scaled dot-product, matching the implementation. The scalar compatibility function g_θ is replaced with the full MHA formulation.
 
-[~1,800 chars]
+[~3,200 chars]
 
 ---
 
@@ -136,36 +141,43 @@ We deeply appreciate this exceptionally thorough review.
 
 **1. Attention inoperative with 1 teammate**
 
-The sharpest point. We now explicitly acknowledge this and decompose Overcooked gains into: (a) dedicated action encoding (learned MLP vs flat observation), (b) auxiliary prediction shaping.
+The sharpest point in all reviews. With one teammate, α = 1.0 trivially — no selective weighting occurs. We now explicitly acknowledge this and decompose Overcooked gains into: (a) dedicated action encoding — VABL processes teammate actions through a learned MLP (ψ_θ) concatenated with observation embeddings before the GRU, providing a stronger inductive bias than MAPPO's flat observation input; (b) auxiliary prediction shaping beliefs toward coordination-relevant features.
 
-We validate selective attention on the **5-agent task**: VABL Best 95.7±3.3 vs MAPPO 84.0±10.4. We separate which claims each experiment validates.
+We validate selective attention on the **5-agent task** (4 teammates): VABL Best 95.7±3.3 vs MAPPO 84.0±10.4, with MAPPO showing 3× higher variance. We now clearly separate: Overcooked validates action-encoding and auxiliary components; the 5-agent task validates selective attention.
 
-**2–3. Propositions 5.1–5.2**
+**2. Proposition 5.1 — MI comparison**
 
-5.1: Both sides now condition on b. Stated as expressivity result. 5.2: Weakened to context-dependent aggregation. Limitation about permutation invariance added.
+The reviewer's counterexample (mean pooling over two independent binary actions preserving more joint info than concentrated attention) is valid for specific weight settings. We now state the corrected version: sup_{θ∈Θ_attn} I(A; c_attn | b_{t-1}^i = b) ≥ sup_{θ∈Θ_mean} I(A; c_mean), conditioning on fixed b on both sides. This is explicitly labeled a "representational capacity result" — the attention family contains mean pooling as a special case (setting g_θ = const), so the supremum over the larger set cannot decrease. We state: "It does not guarantee that a specific learned θ achieves the supremum."
 
-**4–6. Prop 5.3 / Lemma 5.5 / Eq. 7**
+**3. Proposition 5.2 — weighted sum loses identity**
 
-Prop 5.3: convergence rates removed. Lemma 5.5: proof in Appendix B.3. Eq. 7: MHA directly.
+Weakened from "sufficient statistic" to "context-dependent aggregation." We add: "As a weighted sum, attention cannot distinguish permutations of actions within the relevant set: if two teammates take the same action, their key-value tokens are identical. When individual teammate identities are decision-relevant, additional input features (e.g., position encodings) are needed." We implemented identity embeddings (agent index added to action tokens); results mixed at N≤5, suggesting identity tracking matters primarily at larger scales.
 
-**7. Table 2 — 2 seeds**
+**4. Proposition 5.3** — O(γ^k) rates removed entirely. Now labeled "(Informal)" and stated as: "VABL receives teammate action changes at 1-step latency via the attention context, while RNN must infer changes through multi-step observation effects." We explicitly disclaim: "We do not claim formal convergence rates."
 
-Cramped Room ablation rerun with 5 seeds (horizon 400): Full VABL Best 1030±70 vs No Attn 990±65 vs Neither 906±244. Asymmetric Advantages 5-seed ablation at 2M steps running, will be in revision.
+**5. Lemma 5.5** — Full proof provided (see iBYE response #1 for the complete argument using conditional independence and MI chain rule).
 
-**8. No identity information**
+**6. Eq. 7 vs Section 5.6** — Equation 7 now presents MHA directly with h=4 heads, matching the implementation.
 
-Correct. We implemented identity embeddings (agent index added to action tokens). Results mixed at N≤5. Discussed as limitation.
+**7. Table 2 — 2 seeds, 50 episodes**
 
-**9. MAAC and Phan et al.**
+Cramped Room ablation rerun with 5 seeds (horizon 400):
 
-MAAC cited. AERIAL implemented as baseline (training in progress).
+| Config | Best (mean±std) |
+|--------|----------------|
+| Full VABL | **1030 ± 70** |
+| No Attention | 990 ± 65 |
+| No Aux Loss | 951 ± 162 |
+| Neither | 906 ± 244 |
 
-**10. Aux loss hurting**
+Full VABL achieves highest peak with lowest variance (3.5× lower than the baseline).
 
-On Cramped Room (5 seeds): Full VABL Best 1030 vs No Aux 951. Auxiliary loss provides 8% peak gain and 2.3× lower variance.
+**10. Aux loss hurting in original Table 2**
 
-**11. Environments and communication**
+With 5 seeds on Cramped Room: Full VABL Best 1030 vs No Aux 951. Auxiliary loss provides 8% peak gain and 2.3× lower variance (±70 vs ±162). The primary benefit is representation shaping and cross-seed reliability, not peak performance alone.
 
-Added: Cramped Room, 5-agent task, ego-centric PO variant, TarMAC baseline. At 5M steps, MAPPO collapses 100%.
+**11. Environments and baselines**
 
-[~2,000 chars]
+Added: Cramped Room (Best 1030±70), 5-agent task (Best 95.7±3.3), ego-centric PO variant (training in progress), TarMAC and AERIAL baselines (training in progress). At 10M steps, MAPPO collapses 100% (peak 503, final 0).
+
+[~3,500 chars]
