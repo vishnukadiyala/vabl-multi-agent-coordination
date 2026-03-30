@@ -68,11 +68,15 @@ We thank Reviewer iBYE for the rigorous critique. Each concern identified a genu
 
 - **Proposition 5.3:** O(γ^k) rates removed. Now labeled "(Informal)" and stated as an architectural signal-latency argument. We explicitly disclaim: "We do not claim formal convergence rates."
 
-**2. Overcooked is fully observable**
+**2. Overcooked is fully observable / choice of environments**
 
-We agree that standard Overcooked does not test belief formation under partial observability. We retain it as a coordination benchmark where VABL's action-encoding pathway and auxiliary loss provide measurable stability benefits, and we add partially observable environments (5-agent Simple Coordination with stochastic visibility, ego-centric Overcooked variant with view radius 3) to test the belief mechanism.
+We agree that standard Overcooked does not test belief formation under state-level partial observability. We retain it as a coordination benchmark where VABL's action-encoding pathway and auxiliary loss provide measurable stability benefits.
 
-5-agent (stochastic visibility p=0.7): All VABL variants outperform MAPPO (Best 84.0±10.4, 3× higher variance), demonstrating the architecture's advantage under genuine partial observability.
+Regarding Hanabi: we agree it is an excellent benchmark for belief learning under genuine partial observability. We have implemented a Hanabi wrapper and plan to evaluate in the camera-ready. We chose Overcooked because it tests *coordination* (role assignment, spatial planning) rather than *deduction* (card inference), and VABL's design targets the former. We acknowledge this limits the generality of our belief learning claims.
+
+For genuinely PO evaluation, we add: (a) **5-agent Simple Coordination** (stochastic visibility p=0.7); (b) **ego-centric Overcooked** (view radius 3, 91% cells masked).
+
+5-agent results: All VABL variants outperform MAPPO (Best 84.0±10.4, 3× higher variance), demonstrating the architecture's advantage under genuine partial observability.
 
 **3. Undertrained baselines**
 
