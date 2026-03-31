@@ -12,7 +12,7 @@ At **10M environment steps** (25,000 episodes), MAPPO collapses to **zero reward
 
 **5-agent Simple Coordination (5 seeds):** All VABL variants outperform MAPPO (Best **95.7±3.3** vs **84.0±10.4**), with MAPPO showing **3× higher variance**, validating the architecture under genuine partial observability with 4 teammates.
 
-**New baselines (AERIAL and TarMAC):** AERIAL collapses 100% (Best 1110, Final 0) — same as MAPPO. TarMAC (explicit communication) achieves higher peak (Best ~395) but still collapses **85%** (Final ~54). **VABL achieves the lowest collapse (38%) without any communication channel**, demonstrating that auxiliary belief regularization is more effective for stability than explicit communication.
+**New baselines (AERIAL and TarMAC):** AERIAL collapses 100% (Best 1110, Final 0) — same as MAPPO. TarMAC (explicit communication) achieves higher absolute reward than VABL (Final ~54 vs 28) but requires a communication channel. Among methods without communication, VABL (38% collapse) is the most stable; MAPPO and AERIAL both collapse to zero. The cost of implicit-only coordination is quantified: VABL trades ~48% of TarMAC's final reward for eliminating communication bandwidth requirements.
 
 ### Theoretical Corrections
 
@@ -44,7 +44,7 @@ We implemented and evaluated both. Results on Overcooked AA (2M steps):
 > **AERIAL** (attention, no aux): Final 0, Best 1110, Collapse **100%**
 > **MAPPO:** Final 0, Best 503, Collapse **100%**
 
-TarMAC achieves higher peak than VABL via explicit communication but still collapses 85%. AERIAL collapses identically to MAPPO, confirming that **auxiliary prediction — not attention architecture — is the key stability driver**. VABL achieves the lowest collapse without any communication channel. BAD requires enumerable belief spaces and cannot be applied to Overcooked. DICG requires pairwise observation sharing incompatible with our decentralized setting.
+TarMAC achieves higher absolute performance than VABL (Final ~54 vs 28.1) via explicit communication, demonstrating the value of communication when available. However, without communication, MAPPO and AERIAL both collapse to zero reward. VABL is the only communication-free method that maintains non-zero coordination (Final 28.1, 38% collapse), and the differentiating factor is the auxiliary prediction loss (AERIAL has attention but no aux loss and collapses 100%). The implicit coordination cost is ~48% of TarMAC's reward — a meaningful trade-off for bandwidth-constrained deployment. BAD requires enumerable belief spaces. DICG requires pairwise observation sharing incompatible with our decentralized setting.
 
 ### Q3: Do attention weights become sparse?
 
@@ -110,11 +110,11 @@ Auxiliary prediction accuracy starts at chance (~17% for 6 actions) and **increa
 
 ### Q4: Communication comparison
 
-Results on Overcooked AA: AERIAL collapses **100%** (Best 1110, Final 0); TarMAC (explicit communication) collapses **85%** (Best ~395, Final ~54); VABL collapses **38%** (Best 45.6, Final 28.1). AERIAL shares VABL's attention architecture but lacks auxiliary prediction — functioning as a controlled ablation that isolates the causal role of belief regularization. TarMAC's communication channel partially resists collapse (85% vs 100%) but VABL's auxiliary loss is more effective (38%) **without any communication bandwidth**. This provides strong evidence that **auxiliary belief regularization — not attention or communication — is the primary stability mechanism**.
+Results on Overcooked AA: TarMAC (explicit communication) achieves the **highest absolute reward** (Final ~54, Best ~395) but requires a communication channel. AERIAL collapses **100%** (Final 0). VABL collapses **38%** (Final 28.1) — the best communication-free method. AERIAL shares VABL's attention architecture but lacks auxiliary prediction, functioning as a controlled ablation: the aux loss is what prevents collapse, not attention alone. TarMAC shows that communication partially resists collapse (85% vs 100%) and achieves higher absolute reward than VABL. The trade-off is clear: VABL sacrifices ~48% of TarMAC's final reward to eliminate communication requirements entirely — a favorable trade-off when communication is constrained or unavailable.
 
 ### Q5: MAPPO collapse as hyperparameter artifact
 
-Four converging pieces of evidence establish that the collapse is **fundamental**: (a) same tuning protocol for all methods, with VABL sharing MAPPO's exact PPO backbone; (b) at 10M steps, MAPPO collapses **100%**; (c) AERIAL collapses **100%**; (d) TarMAC (explicit communication) collapses **85%**. Three architecturally distinct baselines — value-based (MAPPO), attention-based (AERIAL), and communication-based (TarMAC) — all collapse substantially. Only VABL (38%) maintains stable coordination, and the differentiating factor is the auxiliary prediction loss.
+Four converging pieces of evidence establish that collapse is **widespread**: (a) same tuning protocol for all methods, with VABL sharing MAPPO's exact PPO backbone; (b) at 10M steps, MAPPO collapses **100%**; (c) AERIAL collapses **100%**; (d) TarMAC collapses **85%** (though it maintains higher absolute reward than VABL via communication). Three architecturally distinct baselines all collapse substantially. VABL (38% collapse) and TarMAC (85% collapse, higher absolute reward) are the only methods that maintain non-zero coordination. The differentiating factor for communication-free stability is the auxiliary prediction loss.
 
 ### Q6: Missing baselines
 BAD requires enumerable belief spaces. AERIAL and TarMAC implemented and evaluated (see Q4 for results). DICG requires pairwise observation sharing incompatible with our decentralized execution constraint.
@@ -166,4 +166,4 @@ On Cramped Room: Full VABL Best 1030 vs No Aux 951, with **2.3× lower variance*
 
 ### 11. Environments and baselines
 
-Added: Cramped Room (Best **1030±70**), 5-agent with genuine PO (Best **95.7±3.3**), ego-centric Overcooked (view radius 3). Baseline results on AA: TarMAC collapses **85%** (Final ~54), AERIAL collapses **100%** (Final 0), MAPPO collapses **100%** (Final 0). VABL collapses **38%** (Final 28.1) — the most stable method without communication. Hanabi wrapper implemented for camera-ready.
+Added: Cramped Room (Best **1030±70**), 5-agent with genuine PO (Best **95.7±3.3**), ego-centric Overcooked (view radius 3). Baseline results on AA: TarMAC achieves highest absolute reward (Final ~54) via communication; VABL is the best communication-free method (Final 28.1, 38% collapse); AERIAL and MAPPO both collapse to zero. Hanabi wrapper implemented for camera-ready.
