@@ -33,7 +33,7 @@ We thank Reviewer cfx9 for the constructive feedback.
 > **No Aux Loss:** Best 951 ± 162
 > **Neither:** Best 906 ± 244
 
-Full VABL achieves highest peak with **lowest variance** (3.5× lower than baseline). On Asymmetric Advantages (500 episodes, horizon 400), No Attention achieves Best 152±32 vs Full VABL 108±16 — attention *hurts* on this layout at this training budget. This is consistent with the 2-agent analysis (Reviewer dVmV): with one teammate, selective weighting is inoperative and attention parameters add optimization overhead without benefit. The 2M-step replication is running. Crucially, the **variance reduction from auxiliary loss is consistent** across both layouts (Cramped Room: std 70 vs 162 without aux = **2.3× lower**; AA: std 16 vs 32 = **2× lower**).
+Full VABL achieves highest peak with **lowest variance** (3.5× lower than baseline). On Asymmetric Advantages (500 episodes × horizon 400 = 200K steps, well below the 2M-step convergence budget), No Attention achieves Best 152±32 vs Full VABL 108±16 — attention hurts on this layout at 200K steps. This is consistent with the 2-agent analysis (Reviewer dVmV): with one teammate, selective weighting is inoperative and attention parameters add optimization overhead without benefit. The 2M-step replication is running. Crucially, the **variance reduction from auxiliary loss is consistent** across both layouts (Cramped Room: std 70 vs 162 without aux = **2.3× lower**; AA: std 16 vs 32 = **2× lower**).
 
 ### Q2: Why are DICG, TarMAC, and BAD excluded?
 
