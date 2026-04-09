@@ -138,3 +138,5 @@ pre_camera_ready_2026-04-08/
 /build_*.py
 /run_*.py
 /final_*.py
+vision_experiment/data/
+vision_experiment/results/
