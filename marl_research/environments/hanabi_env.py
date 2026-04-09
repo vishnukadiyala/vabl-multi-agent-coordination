@@ -80,8 +80,7 @@ class HanabiEnv(BaseMAEnv):
         self.env = self._rl_env_module.HanabiEnv(config=hanabi_config)
 
         # Determine observation and action sizes from the environment
-        obs_spec = self.env.observation_spec()
-        self.obs_dim = obs_spec["vectorized"][0]
+        self.obs_dim = self.env.vectorized_observation_shape()[0]
         self.max_moves = self.env.num_moves()
 
         # Action space: max_moves + 1 (index 0 is no-op for non-active players)
@@ -157,7 +156,11 @@ class HanabiEnv(BaseMAEnv):
 
         # Execute the action in the Hanabi environment
         prev_score = self._get_current_score()
-        self._hanabi_obs, reward, self._done, _ = self.env.step(hanabi_action)
+        self._hanabi_obs, raw_reward, self._done, _ = self.env.step(hanabi_action)
+        # Use only positive rewards (successful card plays).
+        # The raw env returns -score at game end, which cancels all gains
+        # and produces zero total episode reward — breaking the training signal.
+        reward = max(raw_reward, 0)
 
         if not self._done:
             self._current_player = self._hanabi_obs["current_player"]

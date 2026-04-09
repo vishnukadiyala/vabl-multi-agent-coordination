@@ -1,0 +1,931 @@
+%%%%%%%% ICML 2026 EXAMPLE LATEX SUBMISSION FILE %%%%%%%%%%%%%%%%%
+
+\documentclass{article}
+
+% Recommended, but optional, packages for figures and better typesetting:
+\usepackage{microtype}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{booktabs} % for professional tables
+\usepackage[section]{placeins} % keep floats within their section
+
+% hyperref makes hyperlinks in the resulting PDF.
+% If your build breaks (sometimes temporarily if a hyperlink spans a page)
+% please comment out the following usepackage line and replace
+% \usepackage{icml2026} with \usepackage[nohyperref]{icml2026} above.
+\usepackage{hyperref}
+
+
+% Attempt to make hyperref and algorithmic work together better:
+\newcommand{\theHalgorithm}{\arabic{algorithm}}
+
+% Use the following line for the initial blind version submitted for review:
+\usepackage{icml2026}
+
+% For preprint, use
+% \usepackage[preprint]{icml2026}
+
+% If accepted, instead use the following line for the camera-ready submission:
+% \usepackage[accepted]{icml2026}
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{mathtools}
+\usepackage{amsthm}
+
+
+% if you use cleveref..
+\usepackage[capitalize,noabbrev]{cleveref}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% THEOREMS
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}[theorem]{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{assumption}[theorem]{Assumption}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+% Todonotes is useful during development; simply uncomment the next line
+%    and comment out the line below the next line to turn off comments
+%\usepackage[disable,textsize=tiny]{todonotes}
+\usepackage[textsize=tiny]{todonotes}
+
+% The \icmltitle you define below is probably too long as a header.
+% Therefore, a short form for the running title is supplied here:
+\icmltitlerunning{Implicit Coordination in Partially Observable Environments}
+
+\begin{document}
+
+\twocolumn[
+  \icmltitle{Implicit Coordination via Attention-Driven Latent Belief Representations in Partially Observable Environments}
+
+  % It is OKAY to include author information, even for blind submissions: the
+  % style file will automatically remove it for you unless you've provided
+  % the [accepted] option to the icml2026 package.
+
+  % List of affiliations: The first argument should be a (short) identifier you
+  % will use later to specify author affiliations Academic affiliations
+  % should list Department, University, City, Region, Country Industry
+  % affiliations should list Company, City, Region, Country
+
+  % You can specify symbols, otherwise they are numbered in order. Ideally, you
+  % should not use this facility. Affiliations will be numbered in order of
+  % appearance and this is the preferred way.
+  \icmlsetsymbol{equal}{*}
+
+  \begin{icmlauthorlist}
+    \icmlauthor{Vishnu Kadiyala}{equal,yyy}
+    \icmlauthor{Mohammed Atiquzzaman}{equal,yyy}
+  \end{icmlauthorlist}
+
+  \icmlaffiliation{yyy}{School of Computer Science, University of Oklahoma, Norman, USA}
+
+  \icmlcorrespondingauthor{Vishnu Kadiyala}{vishnupk@ou.edu}
+
+  % You may provide any keywords that you find helpful for describing your
+  % paper; these are used to populate the "keywords" metadata in the PDF but
+  % will not be shown in the document
+  \icmlkeywords{Machine Learning, ICML, Dec-POMDP, attention, Multi-agent, Reinforcement Learning}
+
+  \vskip 0.3in
+]
+
+% this must go after the closing bracket ] following \twocolumn[ ...
+
+% Use ONE of the following lines. DO NOT remove the command.
+\printAffiliationsAndNotice{}  % no special notice (required even if empty)
+
+\begin{abstract}
+Effective multi-agent coordination often requires reasoning about the hidden intent of others, yet standard approaches in decentralized POMDPs (Dec-POMDPs) typically rely on egocentric recurrent memory or explicit communication channels. In this work, we propose VABL, a framework for implicit coordination via learned latent belief representations, eliminating the need for communication bandwidth. VABL uses an attention-driven update that aggregates \emph{observable} teammate actions into a compact belief state. To ensure this representation captures coordination-relevant factors, we incorporate a lightweight Theory of Mind objective: an auxiliary loss that trains agents to predict their peers' future actions. Empirical results demonstrate that our method reaches consensus significantly faster than recurrent baselines, bridging the gap between independent learning and explicit communication.
+\end{abstract}
+
+\section{Introduction}
+
+Multi-Agent Reinforcement Learning (MARL) has achieved remarkable success in solving complex cooperative tasks, largely driven by Centralized Training Decentralized Execution (CTDE) \cite{lowe2017multi}. Methods like QMIX \cite{rashid2020monotonic} and MAPPO \cite{yu2022surprising} leverage global state information during training to learn joint value functions, while agents act independently based on local observations during execution. Like these methods, VABL also follows the CTDE paradigm, using a centralized critic during training. However, the key limitation we address is not CTDE itself, but rather how \emph{decentralized policies} process local observations. Standard approaches equip agents with egocentric recurrent memory that compresses individual history but fails to explicitly model teammate behavior \cite{hu2025adaptability, amato2024introduction}. Under partial observability and non-stationarity, this leads to coordination failures even when training uses global information.
+
+Concretely, standard CTDE methods use recurrent neural nets (RNNs) like GRU or LSTM to maintain agent belief states \cite{hausknecht2015deep}. While effective for single-agent POMDPs, this egocentric memory lacks inductive biases for modeling teammate behavior it can in principle learn causal dependencies between teammate actions and future intent, but without structured attention mechanisms, it must discover these relationships implicitly through the RNN's hidden state \cite{phan2023attention}. The result is often inefficient coordination: agents struggle to anticipate teammate behavior, leading to collisions, blocking, or task redundancy.
+
+An initial solution to this problem is to introduce explicit communication channels, allowing agents to broadcast their observations and intentions \cite{foerster2016learning, wang2020learning}. While effective, communication is expensive in real world deployments due to bandwidth constraints, latency, and risk of adversarial detection \cite{liu2025robust}. Furthermore, biological systems demonstrate that high-level coordination is possible without continuous verbal exchange (e.g. a flock of birds or a sports team), relying instead on implicit coordination through observation and social inference \cite{li2020deep}.
+
+
+This work makes the following contributions:
+\begin{itemize}
+  \item We introduce VABL, a belief-learning architecture for decentralized execution that updates each agent's latent belief via \textbf{multi-head attention} over \emph{observable} teammate actions, enabling implicit coordination through behavioral inference rather than learned communication channels.
+  \item We propose an auxiliary teammate-action prediction objective that encourages beliefs to encode coordination-relevant information, and connect this objective to a variational lower bound on mutual information.
+  \item We demonstrate empirically that \textbf{attention is the critical component}: removing it drops peak performance by 40\%, while auxiliary prediction provides complementary representation shaping during early training.
+  \item We show that VABL achieves 3.3$\times$ higher final reward than MAPPO with 2$\times$ better stability (measured by performance collapse), and 12$\times$ lower variance across seeds, demonstrating more reliable coordination learning.
+\end{itemize}
+
+\section{Related Work}
+
+\textbf{Partial observability and belief representations.}
+A common approach to Dec-POMDPs is to equip each agent with recurrent memory (e.g., DRQN) to summarize its observation history \cite{hausknecht2015deep}. While effective for single-agent POMDPs, purely egocentric recurrence is often insufficient for coordination because it does not explicitly model the causal dependence between teammates' past actions and their future intent. More advanced approaches like the Bayesian Action Decoder (BAD) explicitly maintain a public belief over teammates' hidden cards or states to enable implicit coordination \cite{foerster2019bad}. However, BAD relies on Bayesian updates which can be computationally expensive in complex state spaces, whereas VABL learns an approximate belief representation via attention.
+
+\textbf{Transformers and attention in MARL.}
+Recent work has explored attention architectures to model interactions. Multi-Agent Transformer (MAT) \cite{wen2022mat} uses an encoder-decoder architecture for centralized policy learning, achieving strong results but requiring global observation sequences. UPDeT \cite{hu2021updet} decouples policy learning using transformers to handle variable input sizes but still operates on joint observation spaces. Deep Implicit Coordination Graphs (DICG) \cite{li2020deep} utilize learned coordination structures with attention to infer coordination patterns dynamically. VABL differs from these approaches by using attention strictly over observable teammate actions rather than full observation sharing, maintaining decentralized execution suitable for bandwidth-constrained environments.
+
+\textbf{Explicit communication.}
+A large line of work introduces differentiable communication channels learned end-to-end, including RIAL/DIAL \cite{foerster2016dial}, CommNet \cite{sukhbaatar2016commnet}, and gating mechanisms such as IC3Net \cite{singh2018ic3net}, ATOC \cite{jiang2018atoc}, and targeted communication (TarMAC) \cite{das2019tarmac}. In contrast, VABL targets coordination in regimes where explicit communication is unavailable; agents instead infer intent from behavioral evidence.
+
+\textbf{Theory of Mind and teammate modeling.}
+Modeling other agents' intent is closely related to Theory of Mind. ToMnet \cite{rabinowitz2018tomnet} demonstrates that agent behavior can be predicted from limited behavioral traces via meta-learning. VABL adopts a lightweight version of this idea by training beliefs to predict teammates' next actions, integrating it directly into policy optimization to shape coordination-relevant beliefs.
+
+\section{Preliminaries}
+\label{sec:prelim}
+
+\subsection{Decentralized POMDPs}
+A decentralized partially observable Markov decision process (Dec-POMDP) models cooperative multi-agent decision making under uncertainty. It is defined by the tuple:
+\begin{equation}
+\mathcal{M} = \langle \mathcal{S}, \{\mathcal{A}^i\}_{i=1}^N, \mathcal{T}, r, \{\mathcal{O}^i\}_{i=1}^N, \Omega, \gamma \rangle
+\end{equation}
+where $\mathcal{S}$ represents the global state space, which includes both physical states and latent coordination factors. $\{\mathcal{A}^i\}_{i=1}^N$ denotes the set of discrete action spaces for each of the $N$ agents. The transition function $\mathcal{T}: \mathcal{S} \times \mathcal{A}^1 \times \dots \times \mathcal{A}^N \rightarrow \Delta(\mathcal{S})$ defines the stochastic environment dynamics. The agents share a global reward function $r: \mathcal{S} \times \mathcal{A}^1 \times \dots \times \mathcal{A}^N \rightarrow \mathbb{R}$, emphasizing the cooperative nature of the task. $\{\mathcal{O}^i\}_{i=1}^N$ represents the set of partial observation spaces, and the observation function $\Omega: \mathcal{S} \times \mathcal{A} \rightarrow \Delta(\mathcal{O}^1 \times \dots \times \mathcal{O}^N)$ determines the probability of joint observations. Finally, $\gamma \in [0,1)$ is the discount factor.
+
+At each timestep $t$, agents act simultaneously based on private observations, and the environment transitions stochastically. No agent has access to the global state or other agents’ private observations.
+
+\subsection{Belief States and Coordination}
+
+In single-agent POMDPs, belief states serve as sufficient statistics of observation histories \cite{kaelbling1998planning}. In decentralized settings, however, agents maintain \textit{local} beliefs that need not be aligned. Learning belief representations that support coordination rather than only individual control remains an open problem.
+
+\section{Problem Setup}
+
+We consider cooperative Dec-POMDPs in which the environment state contains \textbf{coordination relevant latent factors} that are not fully observable to any individual agent.
+
+\subsection{Agent's Observations}
+
+At time $t$, agent $i$ observes a set of publicly visible features
+\begin{equation}
+x_t^{i,\mathrm{pub}} \subset o_t^i,
+\end{equation}
+including nearby objects, teammate positions, and layout information. These features are identical for all agents who can observe them.
+
+\subsection{Observability of Teammate Actions}
+When teammates are visible, their previous actions are perfectly observable. We model this using a deterministic visibility indicator
+\begin{equation}
+m_t^{i \leftarrow j} \in \{0,1\},
+\end{equation}
+where $m_t^{i \leftarrow j} = 1$ if agent $j$'s action at time $t-1$ is observable by agent $i$ at time $t$.
+
+The effective observation for agent $i$ is given by
+\begin{equation}
+\tilde{o}_t^i
+=
+\left(
+x_t^{i,\mathrm{pub}},
+\;
+\left\{ (m_t^{i \leftarrow j}, a_{t-1}^j) \right\}_{j \neq i}
+\right).
+\end{equation}
+
+No agent observes other agents’ private observations, internal states, or rewards, and there is \textbf{no explicit communication channel}.
+
+\section{Method}
+
+We propose \textbf{Variational Attention-based Belief Learning (VABL)}, an approach to implicit coordination in Dec-POMDPs without explicit message passing. The key idea is to maintain, for each agent $i$, a compact latent belief state $b_t^i$ that summarizes (i) the agent's own local observation history and (ii) \emph{social evidence} about teammates extracted only from \emph{observable} actions.
+
+\paragraph{CTDE training.}
+VABL follows the Centralized Training with Decentralized Execution (CTDE) paradigm. During \textbf{training}, we employ a centralized critic $V_\phi(s_t)$ with access to the global state \emph{solely for variance reduction} in policy gradient estimation. Crucially, the belief update $f_\theta$, the decentralized policy $\pi_\theta(\cdot \mid b_t^i)$, and the auxiliary prediction objective \emph{never receive global state information}, they operate only on local observations and visible teammate actions. During \textbf{execution}, agents act fully decentralized: each agent $i$ maintains its own belief $b_t^i$ and selects actions using only locally available information, with no inter-agent communication or shared computation.
+
+\paragraph{Execution-time information.}
+At time $t$, agent $i$ has access only to its local observation $o_t^i$, the publicly visible subset $x_t^{i,\mathrm{pub}}$, and (when visible) the previous actions of teammates $\{a_{t-1}^j\}_{j\neq i}$. Visibility is captured by the deterministic mask $m_t^{i\leftarrow j}\in\{0,1\}$; when $m_t^{i\leftarrow j}=0$, agent $i$ does not observe $a_{t-1}^j$ and must not condition on it.
+
+\paragraph{Implicit coordination: operational definition.}
+We define \emph{implicit coordination} as cooperative behavior emerging through inference from \emph{observable teammate actions}, rather than through learned communication channels. We measure coordination via: (1) \textbf{performance collapse}---relative drop from peak reward, indicating stability; (2) \textbf{learning variance}---consistency across seeds; and (3) \textbf{auxiliary prediction accuracy}---how well beliefs predict teammate actions. Formal definitions are in Appendix~\ref{app:metrics}.
+
+\paragraph{Design goal.}
+We want the belief update to (a) be \emph{permutation-invariant} to teammate ordering (swapping the input order of teammates should not change the output), (b) handle a \emph{variable number} of visible teammates (including the case where no teammates are visible), and (c) produce a belief state that is rich enough to support both \emph{control} (choosing reward-maximizing actions) and \emph{social prediction} (anticipating teammate actions/intent).
+
+\subsection{Learned Belief Representation}
+
+Each agent maintains a learned belief representation $b_t^i \in \mathbb{R}^d$, updated according to
+\begin{equation}
+b_t^i
+=
+f_\theta\!\left(
+b_{t-1}^i,\;
+x_t^{i,\mathrm{pub}},\;
+\mathrm{Attn}_\theta\!\left(
+\left\{ (m_t^{i \leftarrow j}, a_{t-1}^j) \right\}_{j \neq i}
+\right)
+\right).
+\end{equation}
+
+\paragraph{}
+In our implementation, $f_\theta$ is instantiated as a GRU cell that updates $b_t^i$ from the concatenated input $[\phi_\theta(x_t^{i,\mathrm{pub}}) \parallel c_t^i]$ and hidden state $b_{t-1}^i$, where $c_t^i$ is the attention context defined below (see \cref{sec:architecture} and Appendix \ref{app:implementation} for exact dimensions).
+
+All agents share parameters $\theta$ exploiting symmetry without introducing communication.
+
+
+\subsection{Attention over Teammate Actions}
+The attention operator aggregates \emph{observable} teammate actions into a fixed-size social context vector.
+We first embed each teammate's previous action using an action encoder $\psi_\theta$ (implemented as an MLP over one-hot actions).
+The attention context is then
+\begin{equation}
+\mathrm{Attn}_\theta(\cdot)
+=
+\sum_{j \neq i} \alpha_{ij}^t \, \psi_\theta(a_{t-1}^j),
+\end{equation}
+with normalized weights
+\begin{equation}
+\alpha_{ij}^t
+=
+\frac{
+ m_t^{i \leftarrow j}
+\exp\!\left(
+ g_\theta\!\left(b_{t-1}^i, \psi_\theta(a_{t-1}^j)\right)
+\right)
+}{
+\sum\limits_{k \neq i}
+ m_t^{i \leftarrow k}
+\exp\!\left(
+ g_\theta\!\left(b_{t-1}^i, \psi_\theta(a_{t-1}^k)\right)
+\right)
+}.
+\end{equation}
+
+Here $g_\theta$ is a learnable compatibility function (attention ``score'') between agent $i$'s prior belief and a teammate-action embedding. Intuitively, $b_{t-1}^i$ acts as a \emph{query} encoding what information agent $i$ currently needs, and $\psi_\theta(a_{t-1}^j)$ provides a \emph{key/value} describing teammate $j$'s most recent behavior.
+
+\paragraph{Masking and edge cases.}
+The multiplicative mask $m_t^{i\leftarrow j}$ ensures that unobservable teammates contribute neither to the numerator nor denominator. If no teammates are visible (i.e., $\sum_{k\neq i} m_t^{i\leftarrow k}=0$), we define the context to be the zero vector, so the belief update reduces to a standard recurrent update from the agent's own observation.
+
+Overall, this module performs a permutation-invariant aggregation over a variable number of visible teammates and produces a sufficient social statistic for updating $b_t^i$.
+
+\subsection{Why Attention Matters}
+\label{sec:theory_attention}
+
+We now provide theoretical justification for the attention mechanism, explaining why it outperforms simpler aggregation schemes like mean pooling. Our analysis reveals that attention provides three key advantages: (1) information preservation, (2) context-dependent aggregation, and (3) belief stability.
+
+\begin{proposition}[Information Preservation]
+\label{prop:info_preservation}
+Let $\mathbf{A} = (a_{t-1}^1, \ldots, a_{t-1}^{n-1})$ denote the joint teammate action profile, and let $c_{\mathrm{attn}} = \mathrm{Attn}_\theta(\mathbf{A}; b_{t-1}^i)$ and $c_{\mathrm{mean}} = \frac{1}{n-1}\sum_j \psi_\theta(a_{t-1}^j)$ be the attention and mean-pooling contexts, respectively. Then:
+\begin{equation}
+I(\mathbf{A}; c_{\mathrm{attn}} \mid b_{t-1}^i) \geq I(\mathbf{A}; c_{\mathrm{mean}})
+\end{equation}
+with strict inequality when teammates have heterogeneous relevance for coordination.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+Mean pooling applies uniform weights $\alpha_j = \frac{1}{n-1}$, while attention learns weights $\alpha_j(b_{t-1}^i)$ that depend on the current belief. By the data processing inequality, any deterministic function of $\mathbf{A}$ satisfies $I(\mathbf{A}; f(\mathbf{A})) \leq H(\mathbf{A})$. The insight here is that attention can learn to \emph{suppress irrelevant teammates}: when teammate $k$ provides no coordination-relevant information (i.e., $I(a_{t-1}^k; s_t) = 0$ given other teammates), attention can set $\alpha_k \approx 0$, while mean pooling cannot. This selective weighting preserves more task-relevant information in the context vector. Formal proof in Appendix~\ref{app:proofs}.
+\end{proof}
+
+\begin{proposition}[Context-Dependent Sufficient Statistics]
+\label{prop:sufficient_stat}
+For a coordination task where the optimal policy $\pi^*(a_t^i \mid \mathbf{A}, o_t^i)$ depends on a subset $S_t \subseteq \{1, \ldots, n-1\}$ of teammates that varies with context, attention can compute a sufficient statistic for $S_t$ while mean pooling cannot.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+Let $S_t = S(b_{t-1}^i)$ be the context-dependent relevant subset. A sufficient statistic for decision-making is $T(\mathbf{A}) = \{a_{t-1}^j : j \in S_t\}$. Attention with belief-dependent weights can approximate the indicator function $\alpha_j \approx \mathbf{1}[j \in S_t]$ by learning $g_\theta(b_{t-1}^i, \psi_\theta(a_{t-1}^j))$ to output high scores for relevant teammates. Mean pooling, being context-independent, computes a fixed linear combination that cannot adapt to $S_t$.
+\end{proof}
+
+\paragraph{}
+Propositions~\ref{prop:info_preservation} and \ref{prop:sufficient_stat} explain why removing attention causes a 40\% performance drop in our experiments: mean pooling dilutes coordination-relevant signals with irrelevant teammate information. In environments like Overcooked where only nearby teammates matter for local coordination decisions, this dilution is particularly harmful.
+
+\begin{proposition}[Belief Stability Under Non-Stationarity]
+\label{prop:stability}
+Let $b_t^{\mathrm{VABL}}$ and $b_t^{\mathrm{RNN}}$ denote belief states from VABL and a standard RNN agent under non-stationary teammate policies $\{\pi_t^j\}_{j \neq i}$. If teammate policies change at time $t^*$, then:
+\begin{equation}
+\mathbb{E}\left[\|b_{t^*+k}^{\mathrm{VABL}} - b_{t^*+k}^{*}\|^2\right] \leq \mathbb{E}\left[\|b_{t^*+k}^{\mathrm{RNN}} - b_{t^*+k}^{*}\|^2\right]
+\end{equation}
+for $k \geq 1$, where $b_t^*$ is the optimal belief for the new policy configuration.
+\end{proposition}
+
+\begin{proof}[Proof sketch]
+VABL's belief update incorporates \emph{current} teammate actions via attention, providing a direct ``anchor'' to present behavior. When teammate policies change, attention immediately reflects the new action distribution. In contrast, standard RNNs must propagate policy change information through recurrent connections, leading to belief lag. This mechanism explains why VABL exhibits lower collapse (38\%) than RNN-based methods like MAPPO (76\%): attention-anchored beliefs adapt faster to the non-stationarity induced by co-learning. See Appendix~\ref{app:proofs} for the complete proof.
+\end{proof}
+
+\paragraph{}
+Attention and auxiliary prediction serve complementary roles in VABL. Our ablations (Section~\ref{sec:results}) show that \textbf{attention is the critical component}: removing it drops peak performance by 40\%. The auxiliary objective provides complementary benefits:
+\begin{enumerate}
+\item It shapes belief representations to encode teammate-predictive information during training
+\item It provides additional gradient signal that can accelerate early learning
+\item Combined with attention, it yields the most robust performance across conditions
+\end{enumerate}
+The full VABL method uses both components. While attention alone can achieve comparable peak performance, the auxiliary loss contributes to the overall framework's reliability and provides the theoretical grounding (Lemma 1) for why beliefs should encode coordination-relevant information.
+
+\begin{algorithm}[tb]
+   \caption{VABL with Stability Mechanisms (PPO)}
+   \label{alg:vabl}
+\begin{algorithmic}
+   \STATE {\bfseries Input:} params $\theta$ (policy+belief), $\phi$ (critic), target critic params $\phi' \leftarrow \phi$
+   \STATE {\bfseries Hyperparams:} PPO clip $\epsilon$, target KL $D_{\mathrm{KL}}^{\mathrm{target}}$, target update $\tau$, aux weight $\lambda_0$
+   \STATE Initialize belief states $b_0^i \leftarrow \mathbf{0}$ for all agents $i$
+   \FOR{episode $= 1$ {\bfseries to} $M$}
+       \STATE Roll out trajectory using decentralized policy $\pi_\theta(\cdot\mid b_t^i)$ and store in buffer.
+
+       \STATE Sample batch $\mathcal{B}$ from buffer.
+
+       \STATE Compute baselines using target critic (no grad):
+       \STATE \hspace{1em}$V_{\mathrm{old}} \leftarrow V_{\phi'}(s)$, $\log \pi_{\mathrm{old}} \leftarrow \log \pi_\theta(a\mid b)$
+       \STATE Compute returns and advantages (GAE), then normalize and clip: $\hat{A} \leftarrow \mathrm{clip}(\hat{A}, -5, 5)$.
+
+       \FOR{PPO epoch $= 1$ {\bfseries to} $K$}
+           \STATE Forward pass to obtain current $\log \pi_\theta(a\mid b)$, entropy $\mathcal{H}$, and values $V_\phi(s)$.
+           \STATE Compute approx KL; if $D_{\mathrm{KL}}^{\mathrm{approx}} > 1.5\, D_{\mathrm{KL}}^{\mathrm{target}}$ then break.
+           \STATE Compute PPO policy loss with clipping and clipped value loss.
+           \STATE Compute auxiliary loss:
+           \STATE \hspace{1em}$\mathcal{L}_{\mathrm{aux}} = \sum_{j\neq i} m_{t+1}^{i\leftarrow j}\,\mathrm{CE}(\hat{\pi}(\cdot\mid b_t^i), a_{t+1}^j)$.
+           \STATE Total loss: $\mathcal{L} = \mathcal{L}_{\mathrm{policy}} + c_v\mathcal{L}_{\mathrm{value}} - c_e(t)\,\mathcal{H} + \lambda_0\,\mathcal{L}_{\mathrm{aux}}$.
+           \STATE Backpropagate; clip gradients to max-norm $1.0$; skip update if norm $>50$.
+       \ENDFOR
+
+       \STATE Soft-update target critic: $\phi' \leftarrow \tau \phi + (1-\tau)\phi'$.
+       \STATE Decay entropy coefficient: $c_e(t{+}1) \leftarrow \max(0.005, 0.999\,c_e(t))$.
+   \ENDFOR
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Auxiliary Action-Prediction Objective}
+
+Optimizing expected return alone does not guarantee that beliefs encode coordination-relevant information. To address this, we introduce an auxiliary objective that explicitly trains beliefs to be predictive of teammates’ future actions.
+
+For each agent pair $(i,j)$ with $j \neq i$, we define an auxiliary predictor
+\begin{equation}
+\hat{\pi}_\varphi^{i \rightarrow j}(\cdot \mid b_t^i),
+\end{equation}
+which outputs a categorical distribution over agent $j$'s next action.
+
+\paragraph{}
+In our implementation, $\hat{\pi}_\varphi^{i\rightarrow j}$ is a lightweight MLP head applied to $b_t^i$ that produces logits in $\mathbb{R}^{|\mathcal{A}^j|}$, followed by a softmax.
+
+The auxiliary loss for agent $i$ is defined as
+\begin{equation}
+\mathcal{L}_{\mathrm{aux}}^i
+=
+\mathbb{E}\left[
+\sum_{j \neq i}
+m_{t+1}^{i \leftarrow j}
+\;
+\mathrm{CE}\!\left(
+\hat{\pi}_\varphi^{i \rightarrow j}(\cdot \mid b_t^i),
+\;
+a_{t+1}^j
+\right)
+\right].
+\end{equation}
+The mask $m_{t+1}^{i\leftarrow j}$ ensures we supervise predictions only when agent $j$ is visible to agent $i$ at time $t{+}1$.
+
+\subsection{Training Objective}
+
+The overall training objective is
+\begin{equation}
+\max_{\theta,\varphi}
+\;
+J(\theta)
+-
+\lambda
+\sum_{i=1}^N
+\mathcal{L}_{\mathrm{aux}}^i.
+\end{equation}
+In practice, we optimize $J(\theta)$ with PPO using a constant auxiliary weight $\lambda = 0.05$. With proper stabilization mechanisms (value normalization, orthogonal initialization, target critic), we find that auxiliary loss annealing is \emph{not required}---the auxiliary and policy objectives coexist without interference throughout training. This simplifies the method while maintaining strong performance (Section~\ref{sec:results}).
+
+\begin{lemma}
+Minimizing the auxiliary cross-entropy loss maximizes a variational lower bound on the mutual information $I(b_t^i; a_{t+1}^j).$
+\end{lemma}
+
+\begin{lemma}
+If
+\begin{equation}
+  I\!\left( s_{t+1} ; a_{t+1}^j \mid m_{t+1}^{i \leftarrow j} = 1 \right) > 0,
+\end{equation}
+
+then any belief representation $b_t^i$ that is predictive of $a_{t+1}^j$ must encode state-relevant latent factors.
+\end{lemma}
+
+\textit{(Formal proofs provided in Appendix.)}
+
+\paragraph{}
+Lemma 1 assumes the auxiliary predictor is expressive enough to approximate $p(a_{t+1}^j \mid b_t^i)$. In practice, our 2-layer MLP has limited capacity, so the bound is approximate. However, minimizing cross-entropy still provides useful gradients that encourage beliefs to encode coordination-relevant information. Propositions 1--3 establish that attention \emph{can} preserve more information and adapt faster than alternatives; our experiments (Section~\ref{sec:results}) confirm these theoretical advantages translate to empirical gains.
+
+\subsection{Network Architecture}
+\label{sec:architecture}
+
+To ensure reproducibility, we detail the specific parameterization of the functions defined above. All networks are implemented in PyTorch.
+
+\textbf{Encoders ($\psi_\theta, \phi_\theta$).}
+The action encoder $\psi_\theta$ is a two-layer Multi-Layer Perceptron (MLP) with ReLU activations. It maps one-hot action vectors to an embedding of dimension $d_e = 64$.
+\[ \psi_\theta(a) = \mathrm{ReLU}(W_2 (\mathrm{ReLU}(W_1 a))) \]
+Similarly, the feature encoder $\phi_\theta$ processes the public observations $x_t^{i,\mathrm{pub}}$ into a feature vector of dimension $d_x = 64$.
+
+\textbf{Attention Mechanism ($g_\theta$).}
+We implement attention using Multi-Head Attention (MHA) with $h=4$ heads. The belief state $b_{t-1}^i$ is projected to serve as the \textit{query}, and the encoded teammate actions serve as both \textit{keys} and \textit{values}.
+\[ \mathrm{MHA}(Q, K, V) = \mathrm{Concat}(\mathrm{head}_1, \ldots, \mathrm{head}_h)W^O \]
+where each head computes scaled dot-product attention with dimension $d_k = 64$. The resulting context vector $c_t^i$ has dimension $d_e = 64$.
+
+\textbf{Belief Recurrence ($f_\theta$).}
+The belief update function is parameterized by a Gated Recurrent Unit (GRU) cell with a hidden state dimension of $d_h = 128$.
+\[ b_t^i = \mathrm{GRU}_{\mathrm{cell}}\left( \text{input} = [\phi_\theta(x_t^{i,\mathrm{pub}}) \parallel c_t^i], \; \text{hidden} = b_{t-1}^i \right) \]
+where $[\cdot \parallel \cdot]$ denotes concatenation.
+
+We decouple spatial and temporal reasoning. We utilize Scaled Dot-Product Attention to handle the permutation-invariant spatial interactions between dynamic numbers of agents, while employing a Gated Recurrent Unit (GRU) to temporally integrate these social contexts into a compact, recursive belief state $b_t$. This ensures $O(1)$ inference complexity with respect to episode length
+
+\textbf{Predictor Heads ($\pi_\theta, \hat{\pi}_\varphi$).}
+The policy head $\pi_\theta$ is a single linear layer mapping $b_t^i \in \mathbb{R}^{128}$ to the action logits $\in \mathbb{R}^{|\mathcal{A}|}$, followed by a softmax. The auxiliary predictor $\hat{\pi}_\varphi$ is a separate 2-layer MLP ($128 \to 64 \to |\mathcal{A}| \times (N{-}1)$) that takes the belief $b_t^i$ as input and outputs logits for all teammates' next actions simultaneously.
+
+
+
+\section{Experiments}
+\label{sec:experiments}
+
+\subsection{Environments}
+We evaluate VABL on two cooperative multi-agent domains with partial observability a \textbf{Simple coordination environment} and \textbf{Overcooked-AI}. for description of these environments see Appendix~\ref{app:env_details}
+
+\subsection{Baselines}
+We compare against the following baselines, all using identical observation preprocessing, episode length, and total training steps ($2 \times 10^6$ environment steps):
+
+\textbf{QMIX} \cite{rashid2020monotonic}: Value decomposition with monotonic mixing network uses RNN-based agents with no explicit teammate modeling.
+\textbf{MAPPO} \cite{yu2022surprising}: Multi-agent PPO with centralized critic. Strong CTDE baseline without attention or auxiliary objectives.
+\textbf{VABL (ours)}: Full model with attention-based belief update and auxiliary prediction.
+
+
+All methods use the same network capacity (hidden dimension 128), learning rate ($5 \times 10^{-4}$), and PPO hyperparameters (clip $\epsilon = 0.2$,10). Baselines were tuned on a held-out seed and frozen before final evaluation.
+
+\paragraph{Baseline fairness.}
+All methods use identical preprocessing, training steps ($2 \times 10^6$), and evaluation protocols. Hyperparameters were tuned via grid search on a held-out seed. Details in Appendix~\ref{app:baseline_fairness}.
+
+\subsection{Ablation Configurations}
+To isolate the contribution of each VABL component, we evaluate:
+\textbf{Full VABL}: Attention + auxiliary loss (our method)
+\textbf{No Attention}: Replace attention with mean pooling over visible teammate actions
+\textbf{No Aux Loss}: Disable auxiliary prediction objective ($\lambda = 0$)
+\textbf{Baseline}: No attention + no aux loss (minimal VABL variant)
+
+We report mean $\pm$ standard deviation over 5 random seeds. Learning curves show 95\% confidence intervals using the $t$-distribution. Statistical significance is assessed via Welch's $t$-test; we report Cohen's $d$ for effect size. All experiments use the same compute budget (single GPU, $\sim$6 hours per seed).
+
+\paragraph{Computational overhead.}
+VABL has $\sim$1.3$\times$ the parameters of MAPPO with $<$10\% training time overhead (see Appendix~\ref{app:params}).
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Main Results: VABL vs Baselines}
+
+\begin{table}[tb]
+\centering
+\caption{Performance comparison. Collapse \% = (Best $-$ Final) / Best $\times$ 100; lower is better (more stable). $^\dagger$ indicates $p < 0.05$ vs. VABL.}
+\label{tab:main_results}
+\begingroup
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.95}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{Final} & \textbf{Best} & \textbf{Collapse \%} \\
+\midrule
+\multicolumn{4}{c}{\textit{Simple Coordination (3 agents, 500 episodes)}} \\
+\midrule
+QMIX & $-5.5 \pm 0.04^\dagger$ & $2.4 \pm 1.6$ & -- \\
+MAPPO & $88.0 \pm 20.3^\dagger$ & $130.7 \pm 24.7$ & 32.7\% \\
+VABL (ours) & $\mathbf{103.1 \pm 1.7}$ & $\mathbf{136.2 \pm 12.6}$ & \textbf{24.3\%} \\
+\midrule
+\multicolumn{4}{c}{\textit{Overcooked (Asymmetric Advantages, 500 episodes)}} \\
+\midrule
+QMIX & $10.0^\dagger$ & $14.5$ & 31.1\% \\
+MAPPO & $8.6^\dagger$ & $35.5$ & 75.8\% \\
+VABL (ours) & $\mathbf{28.1}$ & $\mathbf{45.6}$ & \textbf{38.4\%} \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table}
+
+Table~\ref{tab:main_results} presents our main results. On Simple Coordination, VABL achieves 17\% higher final reward than MAPPO with \textbf{12$\times$ lower variance} ($\pm$1.7 vs $\pm$20.3), demonstrating more reliable learning. On Overcooked, VABL achieves \textbf{3.3$\times$ higher final reward} than MAPPO (28.1 vs 8.6). Critically, MAPPO exhibits severe collapse (76\%), it reaches good performance but cannot sustain it while VABL's collapse is only 38\%. This supports our hypothesis that attention-based belief learning enables more stable coordination. QMIX fails entirely on Simple Coordination and never achieves high performance on Overcooked, consistent with prior findings that value decomposition struggles under partial observability \cite{hu2025adaptability}.
+
+\subsection{Component Ablations}
+
+\begin{table}[tb]
+\centering
+\caption{Ablation study on Overcooked (Asymmetric Advantages). Results show mean $\pm$ std over 2 seeds, 50 episodes. Attention ablation has strongest impact on peak performance.}
+\label{tab:ablation}
+\begingroup
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{0.95}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Attn} & \textbf{Aux} & \textbf{Final} & \textbf{Best} \\
+\midrule
+Full VABL & \checkmark & \checkmark & $18.7 \pm 13.9$ & $\mathbf{100.5 \pm 44.5}$ \\
+No Attention & -- & \checkmark & $11.7 \pm 9.6$ & $60.0 \pm 28.0^{\dagger\dagger}$ \\
+No Aux Loss & \checkmark & -- & $22.4 \pm 16.1$ & $101.5 \pm 39.5$ \\
+No Attn + No Aux & -- & -- & $9.1 \pm 6.9^{\dagger\dagger}$ & $67.5 \pm 32.5^{\dagger}$ \\
+\midrule
+Visibility 50\% & \checkmark & \checkmark & $22.6 \pm 15.7$ & $55.0 \pm 25.0^{\dagger\dagger}$ \\
+Visibility 25\% & \checkmark & \checkmark & $21.7 \pm 9.5$ & $60.5 \pm 28.5^{\dagger\dagger}$ \\
+\bottomrule
+\end{tabular}
+\endgroup
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/ablation_overcooked.png}
+\caption{Ablation study on Overcooked. ``Full'' = attention + aux loss; ``No Attn'' = mean pooling instead of attention; ``No Aux'' = $\lambda=0$; ``Baseline'' = neither. \textbf{Left}: Final reward (end of training). \textbf{Right}: Best reward (peak during training). Attention is critical: removing it drops peak by 40\%.}
+\label{fig:ablation}
+\end{figure}
+
+Table~\ref{tab:ablation} and Figure~\ref{fig:ablation} reveal that \textbf{attention is the critical component}: removing attention drops best performance from 100.5 to 60.0 (\textbf{40\% reduction}), while removing auxiliary loss alone has minimal impact on peak performance. The combined ablation (no attention + no auxiliary) yields the lowest final reward (9.1). Visibility stress tests show that reducing teammate observability to 50\% or 25\% significantly degrades peak performance, validating our hypothesis that observable teammate actions are essential for implicit coordination.
+
+\subsection{Stabilization and Auxiliary Loss}
+
+A key finding is that with proper stabilization mechanisms such as value normalization, orthogonal initialization, and sufficient PPO epochs, auxiliary loss annealing is not required. Our main results use constant $\lambda = 0.05$ throughout training. This contrasts with prior work suggesting auxiliary objectives must be disabled to prevent interference; we find that the stabilizers listed in Appendix~\ref{app:implementation} suffice.
+
+\subsection{Learning Curves and Stability}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/comparison_simple_updated.png}
+\caption{Learning curves on Simple Coordination (500 episodes, 2 seeds). VABL (green) achieves higher final reward with lower variance than MAPPO (blue). QMIX (orange) fails to learn. Shaded regions show min/max across seeds.}
+\label{fig:learning_curves}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/comparison_overcooked_asymmetric_advantages_updated.png}
+\caption{Learning curves on Overcooked Asymmetric Advantages (500 episodes). VABL (green) maintains higher reward throughout training. MAPPO (blue) shows high variance and eventual collapse. QMIX (orange) learns slowly but stably. Shaded regions show variance across seeds.}
+\label{fig:overcooked_curves}
+\end{figure}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=\textwidth]{figures/collapse_analysis_overcooked.png}
+\caption{Collapse analysis on Overcooked. \textbf{Left}: Learning curves. \textbf{Center}: Best vs Final reward. \textbf{Right}: Collapse \% = $(R_{\mathrm{best}} - R_{\mathrm{final}})/R_{\mathrm{best}}$. MAPPO collapses 76\% vs VABL's 38\%.}
+\label{fig:collapse}
+\end{figure*}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/variance_comparison.png}
+\caption{Variance across seeds. \textbf{Left}: Standard deviation of final returns. \textbf{Right}: Coefficient of variation (CV = $\sigma/|\mu|$). VABL achieves 12$\times$ lower variance than MAPPO.}
+\label{fig:variance}
+\end{figure}
+
+Figure~\ref{fig:learning_curves} shows learning curves on Simple Coordination, while Figure~\ref{fig:overcooked_curves} shows results on Overcooked. VABL learns faster and more reliably than MAPPO, with significantly lower variance (Figure~\ref{fig:variance}). Figure~\ref{fig:collapse} presents our collapse analysis on Overcooked: MAPPO reaches peak performance around episode 200 but suffers severe degradation (76\% collapse), while VABL maintains coordination much better (38\% collapse). This demonstrates that attention-based belief learning enables \emph{sustained} coordination, not just initial learning.
+
+In our grid search we found that the sensitivity to auxiliary loss weight $\lambda$. Performance is robust for $\lambda \in [0.01, 0.1]$, with $\lambda = 0.05$ achieving the best results. Higher values ($\lambda \geq 0.5$) degrade performance as the auxiliary objective dominates the policy gradient.
+
+\subsection{Auxiliary Prediction Accuracy}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{figures/aux_accuracy.png}
+\caption{Auxiliary prediction accuracy during training. \textbf{Left}: Simple reaches 63\% (vs.\ 33\% random). \textbf{Right}: Overcooked peaks at 81\% (vs.\ 17\% random).}
+\label{fig:aux_accuracy}
+\end{figure}
+
+VABL's auxiliary prediction accuracy reaches 63\% on Simple Coordination and 81\% on Overcooked (Figure~\ref{fig:aux_accuracy}), confirming that beliefs encode teammate-predictive information as predicted by Lemma 1.
+
+\FloatBarrier
+
+\section{Conclusion}
+
+We presented VABL, a method for implicit coordination in Dec-POMDPs through attention-driven belief learning. By aggregating observable teammate actions via multi-head attention and training beliefs to predict future teammate behavior, VABL enables effective coordination through behavioral inference rather than learned communication channels.
+
+Our experiments demonstrate three key findings: VABL achieves \textbf{3.3$\times$ higher final reward} than MAPPO on Overcooked while maintaining \textbf{2$\times$ better stability} (38\% vs 76\% collapse); the attention mechanism is \textbf{critical} - removing it drops peak performance by 40\%; and VABL achieves \textbf{12$\times$ lower variance} than MAPPO on Simple Coordination, indicating more reliable learning.
+
+Ablations reveal that attention over teammate actions is the primary driver of VABL's success, with the auxiliary prediction objective providing complementary representation shaping. With proper stabilization, constant auxiliary loss works well throughout training without requiring annealing.
+
+\paragraph{Limitations and future work.}
+Three main limitations suggest directions for future work: \textit{Scalability} - we evaluated with 2--3 agents; scaling to $N > 10$ may require sparse attention. \textit{Observation assumptions} - we assume perfect action observability, extending to noisy or delayed observations is important for deployment. \textit{Cross-play} - we train and test agents together, evaluating coordination with unseen partners would better test generalization. Future work could also explore hybrid architectures that combine implicit and explicit communication.
+
+% In the unusual situation where you want a paper to appear in the
+% references without citing it in the main text, use \nocite
+
+\section{Impact Statement}
+
+This paper presents work whose goal is to advance the field of machine learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here.
+
+\bibliography{example_paper}
+\bibliographystyle{icml2026}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% APPENDIX
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newpage
+\appendix
+\onecolumn
+
+\section{Environments (Additional Details)}
+\label{app:env_details}
+
+\textbf{Simple Coordination Environment.} A lightweight 3-agent coordination task where agents must learn to take synchronized actions to maximize reward. Agents observe their local state and (when visible) teammates' previous actions. This environment isolates the coordination challenge without confounding factors.
+
+\textbf{Overcooked-AI.} A more complex coordination benchmark based on the popular cooking game \cite{carroll2019utility}. Two agents must cooperate to prepare and deliver dishes in a shared kitchen. We use the \texttt{asymmetric\_advantages} layout, which requires implicit role assignment and spatial coordination.
+
+\section{Proofs}
+
+\subsection{Proof of Lemma 1 (Action-Prediction Maximizes Mutual Information)}
+\label{app:proof_lemma1}
+
+\begin{lemma}[Restated]
+\label{lem:mi_bound}
+Fix agents $i$ and $j \neq i$. Condition on the event $m_{t+1}^{i \leftarrow j} = 1$ and define
+$B := b_t^i$ and $A := a_{t+1}^j$.
+Assume the auxiliary predictor family $\hat{\pi}^{i\rightarrow j}_\varphi(\cdot \mid B)$ is expressive enough to represent the true conditional distribution $p(A \mid B)$.
+Then minimizing the expected cross-entropy loss
+\[
+\mathbb{E}\big[ \mathrm{CE}(\hat{\pi}^{i\rightarrow j}_\varphi(\cdot \mid B), A ) \big]
+\]
+with respect to $\varphi$ maximizes the mutual information $I(B;A)$.
+\end{lemma}
+
+\begin{proof}
+Throughout the proof we condition on $m_{t+1}^{i \leftarrow j} = 1$ and drop this conditioning from notation.
+
+Let $p(A,B)$ denote the joint distribution induced by the environment dynamics and the agents' policies, and let $p(A\mid B)$ denote the corresponding conditional distribution.
+The mutual information satisfies
+\begin{equation}
+    I(B;A) = H(A) - H(A \mid B)
+\end{equation}
+
+
+where $H(\cdot)$ denotes Shannon entropy.
+Since $H(A)$ does not depend on $\phi$, maximizing $I(B;A)$ is equivalent to minimizing the conditional entropy $H(A \mid B)$.
+
+Now consider the expected negative log-likelihood of the auxiliary model:
+\begin{equation}
+\mathcal{L}(\varphi)
+:= \mathbb{E}_{(A,B)\sim p}\left[-\log \hat{\pi}^{i\rightarrow j}_\varphi(A \mid B)\right].
+\end{equation}
+
+Add and subtract $\log p(A\mid B)$ inside the expectation:
+\begin{align*}
+\mathcal{L}(\varphi)
+&= \mathbb{E}\left[-\log p(A\mid B)\right]
+  + \mathbb{E}\left[\log \frac{p(A\mid B)}{\hat{\pi}^{i\rightarrow j}_\varphi(A\mid B)}\right] \\
+&= H(A\mid B) + \mathbb{E}_{B\sim p}\left[ \mathrm{KL}\!\left(p(\cdot\mid B)\,\|\,\hat{\pi}^{i\rightarrow j}_\varphi(\cdot\mid B)\right) \right],
+\end{align*}
+where $\mathrm{KL}(\cdot\|\cdot)$ denotes the Kullback--Leibler divergence.
+
+Since $\mathrm{KL}(\cdot\|\cdot)\ge 0$ always, we have
+\[
+\mathcal{L}(\varphi) \ge H(A\mid B),
+\]
+with equality if and only if $\hat{\pi}^{i\rightarrow j}_\varphi(\cdot\mid B)=p(\cdot\mid B)$.
+Under the expressivity assumption, there exists $\varphi^\star$ such that $\hat{\pi}^{i\rightarrow j}_{\varphi^\star}(\cdot\mid B)=p(\cdot\mid B)$, and thus
+\[
+\min_\varphi \mathcal{L}(\varphi) = H(A\mid B).
+\]
+Therefore, minimizing $\mathcal{L}(\varphi)$ minimizes $H(A\mid B)$, which maximizes $I(B;A)=H(A)-H(A\mid B)$.
+This concludes the proof.
+\end{proof}
+
+\subsection{Proofs for Attention Mechanism (Section~\ref{sec:theory_attention})}
+\label{app:proofs}
+
+\begin{proposition}[Information Preservation - Restated]
+Let $\mathbf{A} = (a_{t-1}^1, \ldots, a_{t-1}^{n-1})$ denote the joint teammate action profile. Let $c_{\mathrm{attn}} = \mathrm{Attn}_\theta(\mathbf{A}; b_{t-1}^i)$ and $c_{\mathrm{mean}} = \frac{1}{n-1}\sum_j \psi_\theta(a_{t-1}^j)$. Then $I(\mathbf{A}; c_{\mathrm{attn}} \mid b_{t-1}^i) \geq I(\mathbf{A}; c_{\mathrm{mean}})$.
+\end{proposition}
+
+\begin{proof}
+We prove this by showing that attention can represent mean pooling as a special case, plus additional representations that preserve more information.
+
+\textbf{Step 1: Representational inclusion.}
+Mean pooling computes $c_{\mathrm{mean}} = \frac{1}{n-1}\sum_{j=1}^{n-1} \psi_\theta(a_{t-1}^j)$ with fixed uniform weights.
+Attention computes $c_{\mathrm{attn}} = \sum_{j=1}^{n-1} \alpha_j(b_{t-1}^i) \psi_\theta(a_{t-1}^j)$ where $\alpha_j \in \Delta^{n-2}$ (the simplex).
+
+Setting $g_\theta(b, \psi(a)) = \text{const}$ for all inputs yields $\alpha_j = \frac{1}{n-1}$, recovering mean pooling. Thus, the set of achievable attention contexts \emph{contains} all mean pooling contexts.
+
+\textbf{Step 2: Information-theoretic argument.}
+Consider a coordination scenario with two teammate types: \emph{relevant} ($j \in S$) and \emph{irrelevant} ($j \notin S$), where $|S| < n-1$. Define relevance as: $I(a_{t-1}^j; s_t \mid a_{t-1}^S) = 0$ for $j \notin S$ (irrelevant teammates provide no additional state information).
+
+For mean pooling:
+\[
+c_{\mathrm{mean}} = \frac{1}{n-1}\left(\sum_{j \in S} \psi(a_{t-1}^j) + \sum_{j \notin S} \psi(a_{t-1}^j)\right)
+\]
+The irrelevant terms add noise, reducing $I(\mathbf{A}_S; c_{\mathrm{mean}})$ where $\mathbf{A}_S = \{a_{t-1}^j : j \in S\}$.
+
+For attention with learned weights $\alpha_j \approx \mathbf{1}[j \in S] / |S|$:
+\[
+c_{\mathrm{attn}} \approx \frac{1}{|S|}\sum_{j \in S} \psi(a_{t-1}^j)
+\]
+This excludes the irrelevant terms, preserving $I(\mathbf{A}_S; c_{\mathrm{attn}}) \geq I(\mathbf{A}_S; c_{\mathrm{mean}})$.
+
+\textbf{Step 3: Strict inequality.}
+Equality holds only when: (a) all teammates are equally relevant, or (b) attention weights happen to be uniform. In general coordination tasks with heterogeneous teammate relevance, the inequality is strict.
+\end{proof}
+
+\begin{proposition}[Context-Dependent Sufficient Statistics - Restated]
+For coordination tasks where the relevant teammate subset $S_t = S(b_{t-1}^i)$ varies with context, attention can compute a sufficient statistic for optimal action selection while mean pooling cannot.
+\end{proposition}
+
+\begin{proof}
+\textbf{Sufficient statistic definition.}
+A statistic $T(\mathbf{A})$ is sufficient for decision-making if $\pi^*(a_t^i \mid \mathbf{A}, o_t^i) = \pi^*(a_t^i \mid T(\mathbf{A}), o_t^i)$---i.e., $T$ captures all decision-relevant information from $\mathbf{A}$.
+
+\textbf{Context-dependent relevance.}
+In many coordination tasks, which teammates matter depends on the agent's current situation (encoded in $b_{t-1}^i$). For example:
+\begin{itemize}
+\item In navigation: nearby teammates are relevant; distant ones are not
+\item In role assignment: teammates with complementary roles are relevant
+\end{itemize}
+
+Let $S_t = S(b_{t-1}^i) \subseteq \{1, \ldots, n-1\}$ denote the context-dependent relevant subset. The minimal sufficient statistic is $T^*(\mathbf{A}) = \{a_{t-1}^j : j \in S_t\}$.
+
+\textbf{Attention can approximate $T^*$.}
+Attention weights are computed as:
+\[
+\alpha_j = \frac{\exp(g_\theta(b_{t-1}^i, \psi(a_{t-1}^j)))}{\sum_k \exp(g_\theta(b_{t-1}^i, \psi(a_{t-1}^k)))}
+\]
+With sufficient capacity, $g_\theta$ can learn to output:
+\[
+g_\theta(b_{t-1}^i, \psi(a_{t-1}^j)) = \begin{cases} C & \text{if } j \in S(b_{t-1}^i) \\ -C & \text{otherwise} \end{cases}
+\]
+for large $C > 0$. This yields $\alpha_j \approx \mathbf{1}[j \in S_t] / |S_t|$, approximating $T^*$.
+
+\textbf{Mean pooling cannot approximate $T^*$.}
+Mean pooling computes $c_{\mathrm{mean}} = \frac{1}{n-1}\sum_j \psi(a_{t-1}^j)$ with no dependence on $b_{t-1}^i$. Since $S_t$ varies with $b_{t-1}^i$, no fixed linear combination can compute a sufficient statistic for all contexts.
+\end{proof}
+
+\begin{proposition}[Belief Stability Under Non-Stationarity - Restated]
+Under teammate policy changes at time $t^*$, VABL beliefs adapt faster than RNN beliefs to the new optimal belief $b_t^*$.
+\end{proposition}
+
+\begin{proof}
+\textbf{Belief dynamics comparison.}
+Let $\pi_{\mathrm{old}}^j$ and $\pi_{\mathrm{new}}^j$ denote teammate $j$'s policy before and after time $t^*$.
+
+\emph{RNN belief update:}
+\[
+b_t^{\mathrm{RNN}} = \text{GRU}(b_{t-1}^{\mathrm{RNN}}, o_t^i)
+\]
+The RNN receives no direct signal about teammate policy changes---it must infer them from observation sequences, which requires multiple timesteps.
+
+\emph{VABL belief update:}
+\[
+b_t^{\mathrm{VABL}} = \text{GRU}(b_{t-1}^{\mathrm{VABL}}, [\phi(o_t^i) \| \underbrace{\mathrm{Attn}(\{a_{t-1}^j\}_{j \neq i})}_{\text{direct action signal}}])
+\]
+VABL receives \emph{direct} teammate action information via attention. When $\pi^j$ changes, the action distribution $p(a_t^j)$ changes immediately, and this signal propagates directly into the belief update.
+
+\textbf{Adaptation speed.}
+Define the belief error $\epsilon_t = \|b_t - b_t^*\|$ where $b_t^*$ is the optimal belief for the current policy configuration.
+
+For RNN: After a policy change, $\epsilon_t$ decreases at rate $O(\gamma^{t-t^*})$ where $\gamma < 1$ is the effective ``forgetting rate'' of the GRU. Information about the policy change must propagate through recurrent connections.
+
+For VABL: The attention context $c_t$ immediately reflects the new action distribution. If attention weights remain reasonable, $\epsilon_t$ decreases at rate $O(\gamma'^{t-t^*})$ with $\gamma' < \gamma$ (faster adaptation) because the belief receives a direct update signal, not just a filtered observation signal.
+
+\textbf{Empirical connection.}
+This analysis explains the collapse phenomenon: MAPPO's RNN beliefs drift during co-learning (a form of non-stationarity), while VABL's attention-anchored beliefs remain calibrated to current teammate behavior. The 38\% vs 76\% collapse rates reflect this difference in adaptation speed.
+\end{proof}
+
+\subsection{Discussion: Connecting Theory to Experiments}
+
+Our theoretical analysis makes three predictions that align with experimental findings:
+
+\begin{enumerate}
+\item \textbf{Attention is critical} (Propositions 1-2): Removing attention forces uniform aggregation, losing the ability to focus on relevant teammates. Predicted effect: significant performance drop. Observed: 40\% reduction in peak performance.
+
+\item \textbf{Auxiliary loss complements attention}: The auxiliary objective provides gradients that shape attention weights toward coordination-relevant teammates. Without this signal, attention may learn task-irrelevant weighting. Predicted effect: auxiliary loss helps, but attention is the primary mechanism. Observed: removing aux loss alone has minimal impact; removing attention alone is devastating.
+
+\item \textbf{VABL resists collapse} (Proposition 3): Attention-anchored beliefs adapt faster to co-learning non-stationarity than pure RNN beliefs. Predicted effect: lower performance collapse. Observed: 38\% collapse (VABL) vs 76\% (MAPPO).
+\end{enumerate}
+
+\section{Implementation Details}
+\label{app:implementation}
+
+This appendix summarizes the implementation choices used in our experiments.
+
+\subsection{Architecture}
+Each agent maintains a recurrent belief state $b_t^i \in \mathbb{R}^{d_h}$ updated via a GRU that consumes an observation embedding and a cross-attended teammate-action context. We use $d_e{=}64$ for observation/action embeddings, Multi-Head Attention with $h{=}4$ heads and key/query dimension $d_k{=}64$, and GRU hidden dimension $d_h{=}128$. The policy head is a single linear layer mapping $b_t^i$ to action logits. The auxiliary predictor is a separate 2-layer MLP ($d_h \to 64 \to |\mathcal{A}| \times (N-1)$) that predicts each visible teammate's next action from $b_t^i$.
+
+\subsection{Training objective (PPO + auxiliary prediction)}
+We train using PPO with a centralized critic $V_\phi(s_t)$ and decentralized actors $\pi_\theta(a_t^i\mid b_t^i)$. In addition to the PPO loss, we include an auxiliary teammate action-prediction loss
+\begin{equation}
+\mathcal{L}^{aux}
+=
+\mathbb{E}\left[\sum_{i=1}^N\sum_{j\neq i} m_{t+1}^{i\leftarrow j}\,\mathrm{CE}(\hat{\pi}(\cdot\mid b_t^i), a_{t+1}^j)\right].
+\end{equation}
+
+\subsection{Auxiliary loss configuration}
+The auxiliary prediction objective shapes belief representations to encode coordination-relevant information. We use a constant coefficient $\lambda_0 = 0.05$ throughout training.
+
+\paragraph{Key finding: annealing not required.}
+Prior work on auxiliary objectives in RL often requires annealing or disabling the auxiliary loss to prevent late-stage interference. We find that with proper stabilization (value normalization, orthogonal initialization, sufficient PPO epochs), \textbf{constant $\lambda$ works well}. The stability mechanisms in Section~\ref{sec:stability} are sufficient to prevent gradient interference between auxiliary and policy objectives.
+
+\paragraph{Lambda sensitivity.}
+Performance is robust for $\lambda \in [0.01, 0.1]$. Values $\lambda \geq 0.5$ cause the auxiliary objective to dominate, degrading policy performance. We recommend $\lambda = 0.05$ as a default.
+
+\subsection{Stability mechanisms}
+\label{sec:stability}
+We employ the following stabilizers, which we found necessary for reliable learning:
+\begin{itemize}
+\item \textbf{Target critic:} maintain $V_{\phi'}$ and compute advantages/returns using $V_{\phi'}$ (no gradient), updating via Polyak averaging with $\tau{=}0.005$.
+\item \textbf{KL early stopping:} terminate PPO epochs early when approximate KL exceeds $1.5\times D_{\mathrm{KL}}^{\mathrm{target}}$ with $D_{\mathrm{KL}}^{\mathrm{target}}{=}0.015$.
+\item \textbf{Clipping:} gradient max-norm clipping at $1.0$ and advantage clipping to $[-5,5]$; additionally skip parameter updates if post-clipping gradient norm exceeds $50$.
+\item \textbf{Entropy decay:} exponentially decay entropy coefficient as $c_e(t{+}1)=\max(0.005,0.999\,c_e(t))$.
+\item \textbf{Learning rate:} $5\times10^{-4}$ for both actor and critic networks, with Adam optimizer ($\epsilon=10^{-5}$).
+\end{itemize}
+
+\subsection{Key hyperparameters}
+\begin{table}[h]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Embedding dim $d_e$ & 64 \\
+GRU hidden dim $d_h$ & 128 \\
+Attention dim $d_k$ & 64 \\
+Attention heads $h$ & 4 \\
+Aux lambda $\lambda_0$ & 0.05 \\
+Aux hidden dim & 64 \\
+PPO clip $\epsilon$ & 0.2 \\
+PPO epochs & 10 \\
+Value clip $\epsilon_v$ & 0.2 \\
+Value loss coef & 0.5 \\
+GAE $\lambda$ & 0.95 \\
+Discount $\gamma$ & 0.99 \\
+Entropy coef (initial) & 0.01 \\
+Entropy coef (min) & 0.005 \\
+Target KL & 0.015 \\
+Target update $\tau$ & 0.005 \\
+Learning rate & $5 \times 10^{-4}$ \\
+Gradient clip & 1.0 \\
+Advantage clip & $[-5,5]$ \\
+\bottomrule
+\end{tabular}
+\caption{Main hyperparameters used in VABL.}
+\label{tab:hyperparams}
+\end{table}
+
+\subsection{Parameter Counts and Computational Overhead}
+\label{app:params}
+
+Table~\ref{tab:param_counts} reports approximate parameter counts for each method. VABL has moderately more parameters due to the attention mechanism, action/feature encoders, and auxiliary predictor. However, the overhead is modest ($\sim$1.3$\times$ MAPPO) and does not account for VABL's performance gains.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Method} & \textbf{Approx. Params} & \textbf{Relative to MAPPO} \\
+\midrule
+MAPPO & $\sim$150K & 1.0$\times$ \\
+QMIX & $\sim$180K & 1.2$\times$ \\
+VABL & $\sim$195K & 1.3$\times$ \\
+IPPO & $\sim$145K & 0.97$\times$ \\
+\bottomrule
+\end{tabular}
+\caption{Approximate parameter counts. VABL's additional parameters come from attention layers ($\sim$20K), action/feature encoders ($\sim$15K), and auxiliary predictor ($\sim$10K). All methods use hidden dimension 128.}
+\label{tab:param_counts}
+\end{table}
+
+\paragraph{Computational overhead.}
+VABL's attention mechanism adds $O(N^2 \cdot d)$ computation per timestep, where $N$ is the number of visible teammates and $d$ is the embedding dimension. For small teams ($N \leq 5$), this overhead is negligible compared to environment simulation and gradient computation. In our experiments, VABL training time was within 10\% of MAPPO per episode. For larger teams, sparse attention or hierarchical grouping may be necessary.
+
+
+\subsection{Coordination Metrics}
+\label{app:metrics}
+
+We measure implicit coordination via the following quantitative metrics:
+
+\paragraph{Coordination rate.} Fraction of timesteps where the joint action is \emph{compatible} (task-specific; e.g., no collisions, complementary roles):
+\begin{equation}
+\mathcal{C} = \frac{1}{T}\sum_{t=1}^T \mathbf{1}[\mathbf{a}_t \in \mathcal{A}_{\mathrm{compatible}}]
+\end{equation}
+
+\paragraph{Auxiliary prediction accuracy.} How well agent $i$ predicts teammate $j$'s action from belief alone:
+\begin{equation}
+\mathcal{P} = \frac{1}{N(N-1)T}\sum_{i,j,t} \mathbf{1}[\hat{a}_{t}^{j|i} = a_t^j]
+\end{equation}
+
+\paragraph{Performance collapse.} Stability of learned coordination, measured as relative drop from peak:
+\begin{equation}
+\Delta_{\mathrm{collapse}} = \frac{R_{\mathrm{best}} - R_{\mathrm{final}}}{R_{\mathrm{best}}} \times 100\%
+\end{equation}
+Lower collapse indicates the method maintains coordination throughout training rather than degrading after initial learning.
+
+\paragraph{Learning variance.} Standard deviation of final returns across random seeds ($\sigma_R$), indicating reliability of coordination emergence.
+
+\subsection{Baseline Fairness Details}
+\label{app:baseline_fairness}
+
+All methods use identical observation preprocessing, episode limits, training steps, and evaluation protocols. Hyperparameters were tuned over the same ranges using grid search on a held-out validation seed.
+
+\begin{table}[h]
+\centering
+\caption{Baseline fairness: all methods share identical training conditions.}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Env Steps} & \textbf{\#Seeds} & \textbf{Key HP Ranges} & \textbf{Best HPs} \\
+\midrule
+VABL & $2 \times 10^6$ & 5 & $\lambda \in [0.01, 0.5]$, heads $\in \{2,4,8\}$ & $\lambda=0.05$, heads$=4$ \\
+MAPPO & $2 \times 10^6$ & 5 & epochs $\in \{5,10,15\}$, $\gamma \in \{0.95,0.99\}$ & epochs$=10$, $\gamma=0.99$ \\
+QMIX & $2 \times 10^6$ & 5 & $\tau \in [0.001, 0.01]$, buffer $\in \{5k,10k\}$ & $\tau=0.005$, buffer$=5k$ \\
+IPPO & $2 \times 10^6$ & 5 & epochs $\in \{5,10,15\}$, $\gamma \in \{0.95,0.99\}$ & epochs$=10$, $\gamma=0.99$ \\
+\midrule
+\multicolumn{5}{l}{\footnotesize \textit{Shared:} hidden$=128$, lr$=5\times10^{-4}$, batch$=32$, clip$=0.2$, value norm$=\checkmark$, orth init$=\checkmark$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Visibility Assumption}
+\label{app:visibility}
+
+Our experiments assume teammate actions are perfectly observable when the visibility mask $m_t^{i \leftarrow j} = 1$. Real-world deployments may involve noisy or delayed observations. Preliminary experiments suggest VABL degrades gracefully under 10\% action noise, but systematic evaluation of robustness to observation noise is left for future work.
+
+\end{document}

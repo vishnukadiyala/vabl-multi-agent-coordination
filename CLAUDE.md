@@ -19,6 +19,7 @@ ICML/
 │   └── utils/               # Logging, replay buffer, misc utilities
 ├── results/                 # Experiment output JSON files
 ├── figures/                 # Generated plots and visualizations
+├── wiki/                    # LLM-maintained knowledge base (see Wiki section)
 └── docs/                    # Documentation files
 ```
 
@@ -173,6 +174,85 @@ Example override:
 ```bash
 python -m marl_research.runners.train algorithm=vabl algorithm.attention_heads=2 algorithm.warmup_steps=100
 ```
+
+## Wiki (LLM-Maintained Knowledge Base)
+
+The `wiki/` directory is an LLM-maintained knowledge base following the [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f). It contains synthesized knowledge about algorithms, environments, experiments, and the paper — cross-referenced and kept current.
+
+### Structure
+```
+wiki/
+├── index.md              # Master catalog — read this first
+├── log.md                # Chronological activity log
+├── algorithms/           # VABL, MAPPO, QMIX, TarMAC, AERIAL, CommNet
+├── environments/         # Overcooked, SMAC, Simple
+├── concepts/             # Policy collapse, belief learning, attention, credit assignment
+├── experiments/          # Rebuttal runs, ablations, 10M scaling
+├── papers/               # VABL ICML 2026, PRAJNA
+└── reviews/              # ICML rebuttal (reviewer concerns + evidence)
+```
+
+### Three Layers
+
+1. **Raw sources** (`raw/`, `results/`, `paper/`, `figures/`) — immutable. LLM reads but never modifies. Cataloged in `raw/manifest.md`.
+2. **The wiki** (`wiki/`) — LLM-generated and LLM-maintained. Summaries, cross-references, synthesis.
+3. **The schema** (this section of CLAUDE.md) — conventions and workflows.
+
+### Wiki Operations
+
+**Ingest** — When new sources arrive (experiment results, papers, reviewer feedback):
+1. Read the raw source thoroughly
+2. Create or update a source summary page in `wiki/sources/`
+3. Update all relevant wiki pages (algorithms, concepts, experiments, etc.)
+4. Update `wiki/index.md` if new pages were created
+5. Update `raw/manifest.md` with the new source
+6. Append entry to `wiki/log.md`: `## [YYYY-MM-DD] ingest | Source Title`
+7. Flag any contradictions with existing wiki content
+
+**Query** — When answering questions about the project:
+1. Read `wiki/index.md` to find relevant pages
+2. Read those pages, following cross-references as needed
+3. Synthesize answer with citations to wiki pages
+4. If the answer is valuable (comparison, analysis, synthesis), file it back as a new wiki page
+5. Append entry to `wiki/log.md`: `## [YYYY-MM-DD] query | Question summary`
+
+**Lint** — Health-check the wiki (do this when asked, or when the wiki feels stale):
+1. Check for contradictions between pages (e.g., different numbers for same experiment)
+2. Find stale claims superseded by new data
+3. Identify orphan pages with no inbound links
+4. Flag concepts mentioned but lacking their own page
+5. Verify experiment status pages against actual results files
+6. Check that `raw/manifest.md` is current
+7. Append entry to `wiki/log.md`: `## [YYYY-MM-DD] lint | Findings summary`
+
+### Page Format
+
+Every wiki page uses YAML frontmatter:
+```markdown
+---
+tags: [searchable, tags]
+status: active | in-progress | stale | archived
+related: [other_page, another_page]
+---
+```
+
+Source summary pages (in `wiki/sources/`) additionally include:
+```markdown
+type: paper | review-cycle | experiment-data
+source_path: path/to/raw/source
+ingested: YYYY-MM-DD
+```
+
+### Conventions
+- Wiki pages use YAML frontmatter with `tags`, `status`, and `related` fields
+- Cross-references use relative markdown links: `[VABL](../algorithms/vabl.md)`
+- Experiment tables use `mean +/- std` format
+- `log.md` entries use format: `## [YYYY-MM-DD] action | Description`
+- The LLM owns the wiki — humans read it, the LLM writes and maintains it
+- Raw sources (code, results JSON, paper tex) are immutable; wiki synthesizes them
+- Source summary pages record which wiki pages were updated from each source
+- Mark stale pages with `status: stale` rather than deleting
+- Be honest about limitations and negative results — don't spin
 
 ## Environment Setup
 

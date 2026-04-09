@@ -98,6 +98,28 @@ nul
 # Claude Code local data
 .claude/
 
+# Camera-ready archive (rebuttal-era code and results, frozen snapshot)
+# See pre_camera_ready_2026-04-08/README.md for rationale
+pre_camera_ready_2026-04-08/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+
+# Celestia result pulls (transient)
+/results/celestia_pull/
+
 # Generated images at root (keep figures/ for curated ones)
 /*.png
 

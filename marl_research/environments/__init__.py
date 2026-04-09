@@ -31,4 +31,9 @@ try:
 except ImportError:
     HanabiEnv = None  # hanabi_learning_environment not installed
 
+try:
+    from marl_research.environments.overcooked_jax_env import OvercookedJaxEnv
+except ImportError:
+    OvercookedJaxEnv = None  # jaxmarl not installed
+
 __all__ = ["BaseMAEnv", "ENV_REGISTRY", "register_env", "make_env", "SimpleCoordinationEnv"]
