@@ -157,9 +157,16 @@ UNREAL~\cite{jaderberg2016reinforcement} pioneered auxiliary tasks for
 representation shaping; subsequent work uses world-model
 losses~\cite{hafner2023mastering}, self-predictive
 representations~\cite{schwarzer2021dataefficient}, and contrastive
-objectives~\cite{laskin2020curl}. Most employ constant auxiliary weights
-without examining late-training dynamics. We show that constant weights
-destabilize attention-based encoders at long horizons.
+objectives~\cite{laskin2020curl}.
+Lyle et al.~\cite{lyle2021effect} provide a theoretical analysis of how
+auxiliary tasks shape representation dynamics in TD-based deep RL, and
+Du et al.~\cite{du2018adapting} and Lin et al.~\cite{lin2019adaptive}
+both argue that constant auxiliary weights are suboptimal and propose
+adaptive schemes (cosine-similarity gating and online weighting,
+respectively) as remedies. We instead \emph{characterize} the pathology:
+under MARL co-learning, constant weights destabilize attention-based
+encoders at long horizons, and three distinct gradient interventions
+converge to the same recovered regime.
 
 \paragraph{Attention in MARL.}
 AERIAL~\cite{phan2023attention} uses attention over teammate hidden states;
@@ -192,8 +199,15 @@ gradient-surgery frameworks.
 Overcooked~\cite{carroll2019utility} is widely used for evaluating
 cooperative MARL, with prior reports of severe degradation for
 MAPPO~\cite{yu2022surprising}, value decomposition~\cite{rashid2020monotonic},
-and communication methods~\cite{das2019tarmac}. Our 10M-step evaluation
-reveals that most such reports reflect insufficient training.
+and communication methods~\cite{das2019tarmac}. Cooperative MARL has long
+been known to suffer named coordination pathologies---most prominently
+relative overgeneralization~\cite{wei2016lenient}, where partners' random
+exploration biases joint-action value estimates toward suboptima---and
+deep RL more broadly exhibits late-training degradation through
+mechanisms like capacity loss~\cite{lyle2022capacity}. Our 10M-step
+evaluation reveals that most reported MARL ``collapse'' results reflect
+insufficient training; the residual instability is a distinct,
+gradient-mediated pathology.
 
 
 % ============================================================================
@@ -289,8 +303,8 @@ policy $\pi_j^{(t)}$, which is non-stationary under co-learning.
 We decompose $g_{\mathrm{aux}}(t) = \bar{g}_{\mathrm{aux}} + \varepsilon(t)$
 into a mean component and zero-mean noise with covariance $\Sigma_\varepsilon$.
 The noise $\varepsilon(t)$ arises specifically from co-learning
-non-stationarity: if teammate $j$'s policy were frozen,
-$\varepsilon \to 0$.
+non-stationarity~\cite{hernandezleal2017survey}: if teammate $j$'s policy
+were frozen, $\varepsilon \to 0$.
 
 \paragraph{Stochastic dynamics.}
 Centering around the effective fixed point $\theta^*_{\mathrm{eff}} =
