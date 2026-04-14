@@ -58,9 +58,9 @@ A Cautionary Tale in Belief-Learning Multi-Agent Reinforcement Learning}
 We identify a gradient-interference pathology in cooperative multi-agent
 reinforcement learning (MARL). When an attention-based belief encoder is
 paired with a constant-weight auxiliary prediction loss, late-training
-convergence degrades---even though peak reward is unaffected. In a
-7-configuration ablation across three environment families---Overcooked, SMAX (combat), and
-MPE (navigation)---the pathology manifests on environments with complex
+convergence degrades, even though peak reward is unaffected. In a
+7-configuration ablation across three environment families (Overcooked, SMAX for combat, and
+MPE for navigation), the pathology manifests on environments with complex
 co-learning dynamics (Cohen's $d \geq 1.40$ on Overcooked; present on SMAX)
 but not on simpler cooperative navigation (MPE), consistent with our
 theoretical analysis predicting environment-dependent instability thresholds.
@@ -93,9 +93,9 @@ similar instability~\cite{das2019tarmac, sukhbaatar2016commnet}. These
 findings have motivated auxiliary prediction
 losses~\cite{jaderberg2016reinforcement}, attention-based belief
 encoders~\cite{phan2023attention}, and explicit communication channels as
-stabilization mechanisms. The resulting design pattern---a \emph{shared
+stabilization mechanisms. The resulting design pattern, a \emph{shared
 encoder} trained jointly with a policy loss and a constant-weight auxiliary
-prediction loss---is now widespread beyond MARL, appearing in world
+prediction loss, is now widespread beyond MARL, appearing in world
 models~\cite{hafner2023mastering}, multi-task
 RL~\cite{jaderberg2016reinforcement}, and self-supervised
 representation learning~\cite{schwarzer2021dataefficient}.
@@ -123,9 +123,9 @@ $d \geq 1.40$). The pathology reproduces on a second Overcooked layout
 prediction that the instability threshold depends on the complexity of
 co-learning dynamics (Proposition~\ref{prop:variance}).
 
-Three gradient-targeted interventions---\textbf{(i)}~$\lambda$-annealing,
+Three gradient-targeted interventions, \textbf{(i)}~$\lambda$-annealing,
 \textbf{(ii)}~stop-gradient on the belief input to the auxiliary head,
-\textbf{(iii)}~both combined---converge to a single recovered regime
+and \textbf{(iii)}~both combined, converge to a single recovered regime
 ($470$--$474$), statistically equivalent to removing the auxiliary loss.
 This convergent evidence causally implicates the auxiliary gradient flowing
 into the attention-based encoder. A CIFAR-100 cross-domain test finds the
@@ -175,7 +175,7 @@ AERIAL~\cite{phan2023attention} uses attention over teammate hidden states;
 MAAC~\cite{iqbal2019actor} places attention in the centralized critic;
 MAT~\cite{wen2022mat} uses an encoder-decoder for centralized policy
 learning. None pair attention-based \emph{decentralized} belief encoding
-with an explicit auxiliary loss---the specific combination our ablation
+with an explicit auxiliary loss, the specific combination our ablation
 targets.
 
 \paragraph{Stop-gradient in SSL.}
@@ -202,10 +202,10 @@ Overcooked~\cite{carroll2019utility} is widely used for evaluating
 cooperative MARL, with prior reports of severe degradation for
 MAPPO~\cite{yu2022surprising}, value decomposition~\cite{rashid2020monotonic},
 and communication methods~\cite{das2019tarmac}. Cooperative MARL has long
-been known to suffer named coordination pathologies---most prominently
+been known to suffer named coordination pathologies, most prominently
 relative overgeneralization~\cite{wei2016lenient}, where partners' random
-exploration biases joint-action value estimates toward suboptima---and
-deep RL more broadly exhibits late-training degradation through
+exploration biases joint-action value estimates toward suboptima. Deep
+RL more broadly exhibits late-training degradation through
 mechanisms like capacity loss~\cite{lyle2022capacity}. Our 10M-step
 evaluation reveals that most reported MARL ``collapse'' results reflect
 insufficient training; the residual instability is a distinct,
@@ -221,8 +221,8 @@ We study the pathology in VABL (Variational Attention-based Belief
 Learning), a representative architecture combining attention-based belief
 encoding with auxiliary prediction losses in cooperative
 Dec-POMDPs~\cite{oliehoek2016concise}.
-Our contribution is the pathology and its fixes---applicable to any
-architecture sharing this design pattern---not the specific architecture.
+Our contribution is the pathology and its fixes, applicable to any
+architecture sharing this design pattern, not the specific architecture.
 
 \paragraph{Belief update.}
 Each agent $i$ maintains a recurrent latent belief $b_t^i \in
@@ -337,12 +337,16 @@ $\rho(I - \alpha H) < 1$, the steady-state parameter variance satisfies:
 
 \textit{Assumptions and scope.} The quadratic loss and i.i.d.\ noise
 assumptions are simplifications; real PPO dynamics are nonlinear and the
-noise is correlated. We treat this as a \emph{qualitative} model whose
-predictions we verify in two ways: (i)~a controlled synthetic experiment
-where we directly set $H$ and $\Sigma_\varepsilon$ and confirm the
-variance bound matches exactly (Appendix~\ref{app:synthetic},
-Figure~\ref{fig:synthetic}), and (ii)~the real MARL experiments where all
-seven qualitative predictions hold (enumerated below).
+noise is correlated. We therefore treat this as a \emph{minimal analytical
+model} and establish its validity through two independent verifications.
+First, a controlled synthetic experiment where we directly construct a
+linear stochastic system with the assumed $H$ and $\Sigma_\varepsilon$
+reproduces the variance bound exactly (Appendix~\ref{app:synthetic},
+Figure~\ref{fig:synthetic}), showing the simplification is a faithful
+proxy for the assumed dynamics. Second, the real MARL experiments
+confirm all seven qualitative predictions (enumerated below). Together,
+these verifications justify the simplification: the linearized model
+is sufficient to explain the empirical pathology.
 
 \begin{proof}[Proof sketch]
 The steady-state covariance satisfies the discrete Lyapunov equation
@@ -395,13 +399,13 @@ for the Full VABL configuration on Overcooked AA. The pattern is consistent
 across all 5 seeds: the cosine similarity between PPO and auxiliary gradients
 oscillates erratically in $[-0.47, +0.33]$ while the magnitude ratio stays
 below $0.25$. The auxiliary gradient \emph{decreases} over training as the
-predictor improves, yet the directional instability persists---confirming
+predictor improves, yet the directional instability persists, confirming
 the mechanism is directional noise, not magnitude-driven.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/neurips/f6_gradients.pdf}
-\caption{Gradient decomposition over training for Full VABL on AA (seed~0 shown; pattern consistent across all 5 seeds with cosine range $[-0.47, +0.33]$). \textbf{(a)}~The PPO gradient (blue) stays large while the auxiliary gradient (red) \emph{decreases}. \textbf{(b)}~Cosine similarity oscillates erratically, confirming directional interference. \textbf{(c)}~The magnitude ratio is always $< 0.25$---the pathology is not magnitude-driven.}
+\caption{Gradient decomposition over training for Full VABL on AA (seed~0 shown; pattern consistent across all 5 seeds with cosine range $[-0.47, +0.33]$). \textbf{(a)}~The PPO gradient (blue) stays large while the auxiliary gradient (red) \emph{decreases}. \textbf{(b)}~Cosine similarity oscillates erratically, confirming directional interference. \textbf{(c)}~The magnitude ratio is always $< 0.25$; the pathology is not magnitude-driven.}
 \label{fig:gradients}
 \end{figure}
 
@@ -445,7 +449,7 @@ not the architecture or loss function:
 
 We evaluate on three environment families to test generalization:
 
-\textbf{Overcooked}~\cite{carroll2019utility}: two layouts---\emph{Asymmetric
+\textbf{Overcooked}~\cite{carroll2019utility}: two layouts, \emph{Asymmetric
 Advantages} (asymmetric roles, 2 agents, horizon 400) and \emph{Cramped Room}
 (spatial bottleneck). 25,024 episodes ($\approx$10M env steps), 64 vectorized
 parallel environments via JAX \texttt{vmap}.
@@ -538,7 +542,7 @@ No Aux (attn only) & \checkmark & -- & 484.4 & \textbf{473.45} & 3.62 & \textbf{
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/neurips/f1_dotplot.pdf}
-\caption{Per-seed Final50 on Overcooked AA (10M steps, 5 seeds). Full VABL (magenta) shows bimodal late-training instability with a 23.6-point range; all other configurations cluster tightly. Horizontal lines show means. Marker shapes vary for grayscale readability.}
+\caption{Per-seed Final50 on Overcooked AA (10M steps, 5 seeds). Full VABL (magenta) shows a widened cross-seed spread of 23.6 points with individual seeds drifting $4$--$23$ points below their own peaks; all other configurations cluster tightly within 10 points. Horizontal lines show means. Marker shapes vary for grayscale readability.}
 \label{fig:dotplot}
 \end{figure}
 
@@ -554,7 +558,7 @@ limitation.
 
 The $2 \times 2$ interaction is clean: neither attention alone
 ($473.45 \pm 3.62$) nor the auxiliary loss alone ($471.76 \pm 1.86$) causes
-the pathology. The instability requires \emph{both} components---it is an
+the pathology. The instability requires \emph{both} components; it is an
 interaction effect (full $2 \times 2$ in Appendix~\ref{app:tables}).
 
 \subsection{Convergent Fix Paths}
@@ -563,12 +567,12 @@ interaction effect (full $2 \times 2$ in Appendix~\ref{app:tables}).
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/neurips/f2_variance.pdf}
-\caption{Cross-seed standard deviation of Final50 across all 7 configurations. Full VABL (magenta) has $8.55$ std---$2$--$5\times$ larger than any alternative. The variance pattern is monotonic in residual gradient flow: full flow (Full) $\to$ phased-out flow (Anneal) $\to$ no flow (Stop-grad, No Aux). Hatching patterns distinguish bars in grayscale.}
+\caption{Cross-seed standard deviation of Final50 across all 7 configurations. Full VABL (magenta) has $8.55$ std, $2$--$5\times$ larger than any alternative. The variance pattern is monotonic in residual gradient flow: full flow (Full) $\to$ phased-out flow (Anneal) $\to$ no flow (Stop-grad, No Aux). Hatching patterns distinguish bars in grayscale.}
 \label{fig:variance}
 \end{figure}
 
 The three fix paths in Table~\ref{tab:ablation} (Group~B) all converge to
-Final50 in $[471.60, 473.66]$---a 2.06-point spread smaller than the seed
+Final50 in $[471.60, 473.66]$, a 2.06-point spread smaller than the seed
 envelope of any individual configuration, and statistically equivalent to
 removing the auxiliary loss entirely (A\_no\_aux: $473.45$). This convergence
 of independent interventions to a single recovered regime is strong evidence
@@ -578,7 +582,7 @@ attention-based belief encoder.
 The stop-gradient intervention is the most informative causally: it modifies
 \emph{only} the gradient flow (not the architecture, loss function, forward
 pass, or reward signal) and reduces the cross-seed standard deviation from
-$8.55$ to $2.13$---a $4\times$ reduction.
+$8.55$ to $2.13$, a $4\times$ reduction.
 
 \subsection{Cross-Layout Generalization}
 \label{sec:cramped}
@@ -619,7 +623,7 @@ attention is used, though the effect is strongest in the Full configuration.
 
 \begin{table}[t]
 \centering
-\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding---no method collapses at 10M---and are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL and AERIAL embody among methods evaluated.}
+\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding, since no method collapses at 10M, and are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL and AERIAL embody among methods evaluated.}
 \label{tab:benchmark}
 \small
 \setlength{\tabcolsep}{3pt}
@@ -656,7 +660,7 @@ both layouts. Two findings stand out:
 \textbf{Communication-based methods dominate in mean but with enormous seed
 variance.} TarMAC ($783.72 \pm 156.10$) and CommNet ($773.24 \pm 148.17$)
 achieve the highest Final50 on Asymmetric Advantages, but their cross-seed
-standard deviations exceed 148 points---roughly $30\times$ larger than
+standard deviations exceed 148 points, roughly $30\times$ larger than
 VABL's. Single-seed comparisons between communication and communication-free
 methods are uninformative at this scale (given $\sigma > 148$).
 
@@ -678,7 +682,7 @@ and GRU + additive attention ($d = 1.01$) both reproduce it;
 attention weights as the vulnerability;
 \textbf{(iii)}~placing the auxiliary head on the centralized critic
 (MAAC-style~\cite{iqbal2019actor}) \emph{reverses} the effect
-($d = -0.79$)---the pathology is specific to auxiliary gradients flowing
+($d = -0.79$): the pathology is specific to auxiliary gradients flowing
 through the actor's shared belief encoder.
 
 \paragraph{Environment-dependent threshold and $\lambda$ sensitivity.}
@@ -688,10 +692,17 @@ No~Aux ($11.15 \pm 0.41$) beats Full ($10.60 \pm 0.46$), Cohen's
 $d = 1.26$, matching Overcooked's direction. On
 MPE, the pathology is \textbf{absent}: Full VABL ($-18.82 \pm 0.99$)
 performs comparably to No~Attn ($-18.59 \pm 1.08$), with no penalty for
-the attention + aux combination. This pattern---present on complex coordination (Overcooked, SMAX),
-absent on simple navigation (MPE) and in supervised learning
-(Appendix~\ref{app:vision})---matches Proposition~\ref{prop:variance}'s
-environment-dependent threshold. A $\lambda$ sweep confirms:
+the attention + aux combination. This pattern, present on
+Overcooked and SMAX, absent on MPE and in supervised learning
+(Appendix~\ref{app:vision}), matches Proposition~\ref{prop:variance}'s
+environment-dependent threshold. We interpret the environment
+contrast mechanistically: Overcooked AA and SMAX 3v3 both require
+precise temporal synchronization of asymmetric roles, so teammate~$j$'s
+policy $\pi_j^{(t)}$ changes rapidly whenever either agent restructures
+its behavior, amplifying the non-stationarity that drives
+$\Sigma_\varepsilon$. MPE simple\_spread has symmetric, distance-based
+objectives, so partner policies shift more slowly and
+$\Sigma_\varepsilon$ remains below the instability threshold. A $\lambda$ sweep confirms:
 $\lambda{=}0.01$ is stable (std $1.67$) while $\lambda{=}0.05$ is
 unstable (std $8.55$); at 50M steps both converge with similar high
 variance, confirming the pathology does not self-resolve
@@ -720,6 +731,23 @@ safe because the auxiliary gradient flows through the \emph{critic} (which
 only affects value estimates) rather than the \emph{actor's} belief encoder
 (which directly corrupts the policy). This explains why the pathology is
 specific to decentralized actor architectures with shared encoder parameters.
+Critically, the effect survives independent swaps of recurrence type
+(GRU and LSTM both reproduce it) and attention mechanism (cross-attention
+and additive attention both reproduce it), so the finding is unlikely to
+be a tuning artifact of any single architectural choice.
+
+\paragraph{Connection to reported AERIAL instability.}
+Our analysis provides a mechanistic explanation for the instability
+reported in AERIAL~\cite{phan2023attention}, which pairs attention over
+teammate hidden states with an auxiliary recurrence objective, the
+exact design pattern we identify as vulnerable. In our 10M-step
+reruns, AERIAL's four healthy seeds drop an average of $15.5$ points
+from their peaks (one additional seed plateaued early and never
+converged), a larger late-training drop than Full VABL's $11.6$. We
+did not isolate AERIAL's auxiliary pathway for a controlled ablation
+(its aux signal and attention are tightly coupled in the original
+design), but the direction and magnitude of the drop are consistent
+with the same directional-interference mechanism we characterize here.
 
 \paragraph{Practical recommendations.}
 For architectures combining learned attention with auxiliary prediction in MARL:
@@ -728,7 +756,7 @@ first half of training; \textbf{(2)}~alternatively, apply stop-gradient on
 the encoder output before the auxiliary head; \textbf{(3)}~if auxiliary
 prediction is needed, place the auxiliary head on the centralized critic
 rather than the actor (MAAC-style); \textbf{(4)}~report at
-multiple training budgets---many published ``collapse'' results reflect
+multiple training budgets; many published ``collapse'' results reflect
 undertrained baselines. The stop-gradient fix connects to
 BYOL/SimSiam~\cite{grill2020bootstrap, chen2021exploring}, where it
 similarly prevents auxiliary-to-encoder gradient interference.
@@ -755,9 +783,9 @@ our contribution is the pathology and fixes, not the architecture itself.
 % ============================================================================
 
 Constant-weight auxiliary losses destabilize attention-based belief encoders
-in cooperative MARL at long training horizons, producing bimodal convergence
-and $2$--$5\times$ higher cross-seed variance---while leaving peak reward
-untouched. The pathology generalizes across recurrence types and attention
+in cooperative MARL at long training horizons, producing a widened
+cross-seed spread and $2$--$5\times$ higher variance while leaving peak
+reward untouched. The pathology generalizes across recurrence types and attention
 mechanisms but is absent with mean pooling and reverses when the auxiliary
 loss targets the critic instead of the actor. Three independent
 gradient-targeted fixes converge to a single recovered regime, causally
@@ -860,7 +888,7 @@ Neither & mean pool & -- & 48.06 & 47.08 \\
 \end{table}
 
 The $2 \times 2$ shows no interaction: $\Delta_{\mathrm{aux}}$ (Final5
-with aux $-$ without aux) is $-0.07$ (ViT) and $+0.26$ (mean pool)---both
+with aux $-$ without aux) is $-0.07$ (ViT) and $+0.26$ (mean pool), both
 within noise.
 Proposition~\ref{prop:variance} predicts this: in supervised learning,
 $\Sigma_\varepsilon \to 0$ as the auxiliary predictor converges against
@@ -979,7 +1007,7 @@ environment steps) with 5 seeds each (80 runs total) on Overcooked AA.
 to the same regime ($\sim$470) by 10M steps. \textbf{(b)}~Collapse drops from
 $\sim$45\% at 500K to $<$6\% at 2.5M+, confirming the training-budget artifact.
 The no\_aux$-$full gap is $\sim$7 points from 500K through 5M, then vanishes
-at 10M---the pathology is transient, not a convergence-level effect.}
+at 10M; the pathology is transient, not a convergence-level effect.}
 \label{fig:sample_efficiency}
 \end{figure}
 
@@ -1035,7 +1063,7 @@ GRU & cross-attn & \textbf{critic} & $546.6 \pm 156.6$ & $458.1 \pm 21.5$ & $-0.
 \end{tabular}
 
 \vspace{2pt}
-{\footnotesize $^\ddagger$Both conditions exhibit high bimodal variance ($\sigma > 145$), making the aux effect undetectable.}
+{\footnotesize $^\ddagger$Both conditions exhibit high intrinsic cross-seed variance ($\sigma > 145$) in both the +aux and $-$aux cells, making the aux effect undetectable.}
 \end{table}
 
 The pathology appears whenever \emph{any} recurrence (GRU or LSTM) is paired
