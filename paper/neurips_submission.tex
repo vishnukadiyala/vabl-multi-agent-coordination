@@ -85,12 +85,12 @@ training-budget artifact (collapse $<5\%$ at 10M steps). We release a 350{+}-run
 \label{sec:intro}
 % ============================================================================
 
-Cooperative MARL methods are widely reported to exhibit \emph{coordination
-collapse}: agents reach strong peak reward during training, then degrade.
-On Overcooked, MAPPO reportedly collapses by
+Cooperative MARL methods on Overcooked are widely reported to collapse
+after reaching strong peak reward during training: MAPPO by
 76\%~\cite{yu2022surprising}, AERIAL by
 100\%~\cite{phan2023attention}, with communication-based methods showing
-similar instability~\cite{das2019tarmac, sukhbaatar2016commnet}. These reports have motivated auxiliary prediction
+similar instability~\cite{das2019tarmac, sukhbaatar2016commnet}. These
+findings have motivated auxiliary prediction
 losses~\cite{jaderberg2016reinforcement}, attention-based belief
 encoders~\cite{phan2023attention}, and explicit communication channels as
 stabilization mechanisms. The resulting design pattern---a \emph{shared
@@ -101,9 +101,11 @@ RL~\cite{jaderberg2016reinforcement}, and self-supervised
 representation learning~\cite{schwarzer2021dataefficient}.
 
 We find that most of this phenomenon is a \textbf{training-budget artifact}.
-At $10$M environment steps ($50\times$ the standard budget) on Overcooked
-Asymmetric Advantages, MAPPO converges stably (collapse $2.4\%$),
-TarMAC at $1.0\%$, CommNet at $2.4\%$.
+In our sample-efficiency measurements on Overcooked Asymmetric Advantages
+(four VABL ablation configurations, 5 seeds each, 80 runs), collapse
+drops from $\sim$46\% at 500K environment steps to $<$6\% at 2.5M and
+$<$3\% at 10M. At $10$M ($50\times$ the standard budget), MAPPO converges
+stably (collapse $2.4\%$), TarMAC at $1.0\%$, CommNet at $2.4\%$.
 However, one specific configuration does exhibit genuine late-training
 instability that persists at $10$M steps.
 
@@ -304,7 +306,9 @@ We decompose $g_{\mathrm{aux}}(t) = \bar{g}_{\mathrm{aux}} + \varepsilon(t)$
 into a mean component and zero-mean noise with covariance $\Sigma_\varepsilon$.
 The noise $\varepsilon(t)$ arises specifically from co-learning
 non-stationarity~\cite{hernandezleal2017survey}: if teammate $j$'s policy
-were frozen, $\varepsilon \to 0$.
+were frozen, $\varepsilon \to 0$. This non-stationarity is a defining
+feature of cooperative MARL and more broadly of any co-learning
+multi-agent system.
 
 \paragraph{Stochastic dynamics.}
 Centering around the effective fixed point $\theta^*_{\mathrm{eff}} =
@@ -615,7 +619,7 @@ attention is used, though the effect is strongest in the Full configuration.
 
 \begin{table}[t]
 \centering
-\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling.}
+\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding---no method collapses at 10M---and are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL and AERIAL embody among methods evaluated.}
 \label{tab:benchmark}
 \small
 \setlength{\tabcolsep}{3pt}
