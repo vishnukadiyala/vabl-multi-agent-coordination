@@ -75,7 +75,11 @@ types (GRU, LSTM) and attention mechanisms (cross-attention, additive) but
 is absent with mean pooling, and reverses when the auxiliary loss is placed
 on the critic rather than the actor's belief encoder. We additionally
 show that ``coordination collapse'' on Overcooked is largely a
-training-budget artifact (collapse $<5\%$ at 10M steps). We release a 350{+}-run,
+training-budget artifact (collapse $<5\%$ at 10M steps). The finding
+yields concrete design rules for any architecture in this class: use
+$\lambda \leq 0.01$ or anneal it to zero, apply stop-gradient on the
+belief into the auxiliary head, or place the auxiliary head on the
+centralized critic instead of the actor. We release a 350{+}-run,
 5-seed benchmark across three environment families with code and data.
 \end{abstract}
 
@@ -132,17 +136,26 @@ into the attention-based encoder. A CIFAR-100 cross-domain test finds the
 pathology absent in supervised learning, narrowing it to MARL's co-learning
 non-stationarity.
 
-Our contributions: \textbf{(1)}~theoretical analysis
-(Proposition~\ref{prop:variance}) and causal confirmation via gradient
+Our contributions: \textbf{(1)}~identification, theoretical analysis
+(Proposition~\ref{prop:variance}), and causal confirmation via gradient
 decomposition of a directional-interference pathology in attention +
-constant auxiliary loss architectures; \textbf{(2)}~three convergent
-gradient-targeted fixes; \textbf{(3)}~environment-dependence (present
-on Overcooked and SMAX, absent on MPE) with $\lambda$ sensitivity
-between $0.01$ and $0.05$; \textbf{(4)}~a 60-run architecture sweep
-(Table~\ref{tab:arch_sweep}) generalizing across recurrence and attention
-but absent with mean pooling and reversed on critic-aux;
-\textbf{(5)}~training-budget artifact framing of coordination collapse;
-\textbf{(6)}~a 350{+}-run, 5-seed benchmark with public code and data.
+constant auxiliary loss architectures under MARL co-learning;
+\textbf{(2)}~three convergent, gradient-targeted fix paths that yield
+concrete design rules for practitioners (\emph{use $\lambda \leq 0.01$
+or anneal $\lambda \to 0$; stop-gradient on the belief into the
+auxiliary head; or place the auxiliary head on the centralized critic
+instead of the actor}); \textbf{(3)}~characterization of the
+pathology's environment-dependence (present on Overcooked and SMAX,
+absent on MPE) with $\lambda$ sensitivity confirming a threshold
+between $\lambda{=}0.01$ (stable) and $\lambda{=}0.05$ (unstable);
+\textbf{(4)}~a 60-run architecture sweep
+(Table~\ref{tab:arch_sweep}) showing the pathology generalizes across
+recurrence types and attention mechanisms but is absent with mean
+pooling and reverses when the auxiliary loss is placed on the critic
+rather than the actor; \textbf{(5)}~evidence that coordination collapse
+on Overcooked is largely a training-budget artifact;
+\textbf{(6)}~a reproducible 350{+}-run, 5-seed benchmark across three
+MARL environment families with public code and data.
 
 
 % ============================================================================
@@ -156,14 +169,15 @@ representation shaping; subsequent work uses world-model
 losses~\cite{hafner2023mastering}, self-predictive
 representations~\cite{schwarzer2021dataefficient}, and contrastive
 objectives~\cite{laskin2020curl}.
-Lyle et al.~\cite{lyle2021effect} analyze how auxiliary tasks shape
-representation dynamics in TD-based deep RL, and Du et
-al.~\cite{du2018adapting} and Lin et al.~\cite{lin2019adaptive} both
-argue that constant auxiliary weights are suboptimal and propose
-adaptive schemes (cosine-similarity gating and online weighting) as
-remedies. In MARL, XP-MARL~\cite{xu2024xpmarl} frames auxiliary
-prioritization as a non-stationarity remedy. We instead
-\emph{characterize} the pathology:
+Lyle et al.~\cite{lyle2021effect} provide a theoretical analysis of
+how auxiliary tasks shape representation dynamics in TD-based deep RL,
+and Du et al.~\cite{du2018adapting} and Lin et al.~\cite{lin2019adaptive}
+both argue that constant auxiliary weights are suboptimal and propose
+adaptive schemes (cosine-similarity gating and online weighting,
+respectively) as remedies. In the MARL setting,
+XP-MARL~\cite{xu2024xpmarl} frames an auxiliary prioritization signal
+explicitly as a tool to manage co-learning non-stationarity. We
+instead \emph{characterize} the pathology:
 under MARL co-learning, constant weights destabilize attention-based
 encoders at long horizons, and three distinct gradient interventions
 converge to the same recovered regime.
@@ -183,15 +197,33 @@ collapse. Our stop-gradient fix path is analogous: it prevents the auxiliary
 loss from destabilizing the belief encoder via gradient interference.
 
 \paragraph{Gradient interference.}
-PCGrad~\cite{yu2020gradient} projects conflicting task gradients,
-GradNorm~\cite{chen2018gradnorm} balances task weights dynamically, and
-HyperMARL~\cite{tessera2025hypermarl} decouples cross-agent gradients
-via agent-conditioned hypernetworks. These methods address
-\emph{cross-task} or \emph{cross-agent} interference at a single timestep. Our finding is qualitatively different: the interference is \emph{temporal} (the auxiliary gradient is
-benign early but becomes destabilizing late in training under co-learning
-non-stationarity), \emph{directional} rather than magnitude-driven (the
-auxiliary gradient is small but erratically oriented), and
-\emph{environment-dependent} (present on complex coordination tasks, absent
+PCGrad~\cite{yu2020gradient} projects conflicting task gradients;
+GradNorm~\cite{chen2018gradnorm} balances task weights dynamically;
+HyperMARL~\cite{tessera2025hypermarl} introduces agent-conditioned
+hypernetworks to decouple cross-agent gradient flow in the actor
+parameters. These methods address \emph{cross-task} or \emph{cross-agent}
+interference: two losses (or two agents) at the same time step pulling
+in opposite directions. Multi-timescale
+learning~\cite{nekoei2023dealing} addresses MARL non-stationarity
+differently, by slowing partner updates so that each agent sees a
+quasi-stationary target.
+
+None of these techniques directly targets the mechanism we identify.
+PCGrad and GradNorm operate on the \emph{magnitudes} of concurrent task
+gradients, but the auxiliary gradient in our pathology is already small
+(magnitude ratio $<25\%$); the harm is in its \emph{direction}, which
+oscillates from step to step under co-learning. HyperMARL decouples
+gradients \emph{across agents}, but our pathology is intra-agent: the
+auxiliary and policy objectives share the same actor's belief encoder.
+Multi-timescale learning reduces the rate at which partner policies
+drift but does not remove the aux-to-encoder gradient pathway, which
+is what our three fix paths intervene on. Our finding is qualitatively
+different from all of these: the interference is \emph{temporal} (the
+auxiliary gradient is benign early but becomes destabilizing late in
+training under co-learning non-stationarity), \emph{directional} rather
+than magnitude-driven (the auxiliary gradient is small but erratically
+oriented), and \emph{environment-dependent} (present on complex
+coordination tasks, absent
 on simpler ones). These distinctions are not captured by existing
 gradient-surgery frameworks.
 
@@ -306,8 +338,11 @@ into a mean component and zero-mean noise with covariance $\Sigma_\varepsilon$.
 The noise $\varepsilon(t)$ arises specifically from co-learning
 non-stationarity~\cite{hernandezleal2017survey, nekoei2023dealing}: if
 teammate $j$'s policy were frozen, $\varepsilon \to 0$. This
-non-stationarity is a defining feature of cooperative MARL and any
-co-learning multi-agent system.
+non-stationarity is a defining feature of cooperative MARL and more
+broadly of any co-learning multi-agent system. Prior work has tackled
+it through multi-timescale learning rather than directly through a
+gradient-level analysis of how auxiliary objectives propagate into
+shared encoders.
 
 \paragraph{Stochastic dynamics.}
 Centering around the effective fixed point $\theta^*_{\mathrm{eff}} =
@@ -684,6 +719,18 @@ attention weights as the vulnerability;
 ($d = -0.79$): the pathology is specific to auxiliary gradients flowing
 through the actor's shared belief encoder.
 
+\paragraph{Design rule.}
+Taking the sweep together with the fix-path results, a concrete
+recommendation emerges for MARL practitioners: \emph{any decentralized
+actor architecture that combines learned attention with a
+constant-weight auxiliary loss on the actor-side shared encoder is
+at risk for the late-training directional-interference pathology we
+document}. Mean pooling in place of learned attention is safe; moving
+the auxiliary head to the centralized critic (MAAC-style) is safe;
+annealing $\lambda$ or applying stop-gradient on the belief into the
+auxiliary head is safe. Any single one of these interventions
+suffices.
+
 \paragraph{Environment-dependent threshold and $\lambda$ sensitivity.}
 We test on SMAX 3v3 (combat, 50K episodes) and MPE simple\_spread
 (navigation, 100K episodes). On SMAX, the pathology \textbf{reproduces}:
@@ -693,11 +740,15 @@ MPE, the pathology is \textbf{absent}: Full VABL ($-18.82 \pm 0.99$)
 performs comparably to No~Attn ($-18.59 \pm 1.08$), with no penalty for
 the attention + aux combination. This pattern, present on Overcooked and SMAX, absent on MPE and in
 supervised learning (Appendix~\ref{app:vision}), matches
-Proposition~\ref{prop:variance}'s environment-dependent threshold.
-Mechanistically, Overcooked AA and SMAX 3v3 require precise temporal
-synchronization of asymmetric roles, so partner policies shift rapidly
-and amplify $\Sigma_\varepsilon$; MPE's symmetric distance-based
-objectives keep $\Sigma_\varepsilon$ below threshold. A $\lambda$ sweep confirms:
+Proposition~\ref{prop:variance}'s environment-dependent threshold. We
+interpret the contrast mechanistically: Overcooked AA and SMAX 3v3
+both require precise temporal synchronization of asymmetric roles, so
+teammate~$j$'s policy $\pi_j^{(t)}$ changes rapidly whenever either
+agent restructures its behavior, amplifying the non-stationarity that
+drives $\Sigma_\varepsilon$. MPE simple\_spread has symmetric,
+distance-based objectives, so partner policies shift more slowly and
+$\Sigma_\varepsilon$ remains below the instability threshold. A
+$\lambda$ sweep confirms:
 $\lambda{=}0.01$ is stable (std $1.67$) while $\lambda{=}0.05$ is
 unstable (std $8.55$); at 50M steps both converge with similar high
 variance, confirming the pathology does not self-resolve
@@ -709,6 +760,30 @@ variance, confirming the pathology does not self-resolve
 \label{sec:discussion}
 % ============================================================================
 
+\paragraph{Practical recommendations.}
+Our analysis yields four concrete design rules for any architecture
+that pairs learned attention with an auxiliary prediction objective in
+cooperative MARL. \textbf{(1)}~Use $\lambda \leq 0.01$ or anneal
+$\lambda \to 0$ over the first half of training. The auxiliary
+objective still contributes representation shaping early when partner
+policies are random, and phases out before late-training instability
+manifests. \textbf{(2)}~Apply stop-gradient on the belief before it
+enters the auxiliary head. The auxiliary MLP still trains its own
+weights, but the aux-to-encoder gradient pathway, which is where the
+directional noise accumulates, is severed at its source.
+\textbf{(3)}~If auxiliary prediction is needed as an architectural
+component rather than only a training-time regularizer, place the
+auxiliary head on the centralized critic (MAAC-style) rather than on
+the actor's shared belief encoder. \textbf{(4)}~Report at multiple
+training budgets; many published coordination-collapse results reflect
+undertrained baselines rather than architectural failure. Our
+stop-gradient fix is the direct analogue of the mechanism used by
+BYOL, SimSiam, and DINO~\cite{grill2020bootstrap, chen2021exploring, caron2021emerging}
+to prevent auxiliary losses from corrupting a shared encoder in
+self-supervised learning. Any single one of the four interventions is
+sufficient in our experiments; practitioners should pick the one that
+best fits their codebase.
+
 \paragraph{Why co-learning non-stationarity matters.}
 Our gradient decomposition (Figure~\ref{fig:gradients}) shows the auxiliary
 gradient is small in magnitude ($<25\%$ of PPO) but oscillates erratically
@@ -716,7 +791,11 @@ in direction (cosine in $[-0.47, +0.33]$ across 5 seeds). Proposition~\ref{prop:
 formalizes this: steady-state variance scales with
 $\mathrm{tr}(\Sigma_\varepsilon)$, which stays nonzero under co-learning.
 In supervised learning, both magnitude and direction converge, so the
-interference never arises.
+interference never arises. This is why the same aux + attention
+configuration is harmless on CIFAR-100 (Appendix~\ref{app:vision}) but
+damaging on Overcooked and SMAX: the mathematical precondition for
+directional noise simply does not exist outside of a co-learning
+multi-agent setting.
 
 \paragraph{Why learned attention is the vulnerability.}
 The architecture sweep (Table~\ref{tab:arch_sweep}) isolates the mechanism:
@@ -726,9 +805,11 @@ safe because the auxiliary gradient flows through the \emph{critic} (which
 only affects value estimates) rather than the \emph{actor's} belief encoder
 (which directly corrupts the policy). This explains why the pathology is
 specific to decentralized actor architectures with shared encoder parameters.
-The effect survives independent swaps of recurrence (GRU/LSTM) and
-attention (cross-attention/additive), so it is unlikely a tuning
-artifact.
+Critically, the effect survives independent swaps of recurrence type
+(GRU and LSTM both reproduce it) and attention mechanism
+(cross-attention and additive attention both reproduce it), so the
+finding is unlikely to be a tuning artifact of any single architectural
+choice.
 
 \paragraph{Connection to reported AERIAL instability.}
 Our analysis provides a mechanistic explanation for the instability
@@ -742,18 +823,6 @@ did not isolate AERIAL's auxiliary pathway for a controlled ablation
 (its aux signal and attention are tightly coupled in the original
 design), but the direction and magnitude of the drop are consistent
 with the same directional-interference mechanism we characterize here.
-
-\paragraph{Practical recommendations.}
-For architectures combining learned attention with auxiliary prediction in MARL:
-\textbf{(1)}~use $\lambda \leq 0.01$ or anneal $\lambda \to 0$ over the
-first half of training; \textbf{(2)}~alternatively, apply stop-gradient on
-the encoder output before the auxiliary head; \textbf{(3)}~if auxiliary
-prediction is needed, place the auxiliary head on the centralized critic
-rather than the actor (MAAC-style); \textbf{(4)}~report at
-multiple training budgets; many published ``collapse'' results reflect
-undertrained baselines. The stop-gradient fix connects to
-BYOL/SimSiam~\cite{grill2020bootstrap, chen2021exploring}, where it
-similarly prevents auxiliary-to-encoder gradient interference.
 
 
 % ============================================================================
