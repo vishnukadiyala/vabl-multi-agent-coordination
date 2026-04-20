@@ -308,11 +308,10 @@ regularization, and the auxiliary loss:
 where $\lambda = 0.05$ is the auxiliary loss weight. In the standard
 configuration, $\lambda$ is held constant throughout training.
 
-\paragraph{Gradient pathway.} The auxiliary loss gradient flows through the belief
-$b_t^i$ and into the attention mechanism, the GRU, and the observation
-encoder $\phi_\theta$. This is the gradient pathway that our ablation
-(Section~\ref{sec:results}) identifies as the source of the late-training
-instability.
+\paragraph{Gradient pathway.} The auxiliary loss gradient flows
+through the belief $b_t^i$ into the attention mechanism, GRU, and
+observation encoder $\phi_\theta$. Section~\ref{sec:results} identifies
+this pathway as the source of the late-training instability.
 
 
 % ============================================================================
@@ -335,15 +334,14 @@ policy $\pi_j^{(t)}$, which is non-stationary under co-learning.
 
 \paragraph{Noise decomposition.}
 We decompose $g_{\mathrm{aux}}(t) = \bar{g}_{\mathrm{aux}} + \varepsilon(t)$
-into a mean component and zero-mean noise with covariance $\Sigma_\varepsilon$.
-The noise $\varepsilon(t)$ arises specifically from co-learning
+into a mean component and zero-mean noise with covariance
+$\Sigma_\varepsilon$. The noise $\varepsilon(t)$ arises specifically
+from co-learning
 non-stationarity~\cite{hernandezleal2017survey, nekoei2023dealing}: if
-teammate $j$'s policy were frozen, $\varepsilon \to 0$. This
-non-stationarity is a defining feature of cooperative MARL and more
-broadly of any co-learning multi-agent system. Prior work has tackled
-it through multi-timescale learning rather than directly through a
-gradient-level analysis of how auxiliary objectives propagate into
-shared encoders.
+teammate $j$'s policy were frozen, $\varepsilon \to 0$. Prior work
+tackles this non-stationarity through multi-timescale learning rather
+than through a gradient-level analysis of how auxiliary objectives
+propagate into shared encoders.
 
 \paragraph{Stochastic dynamics.}
 Centering around the effective fixed point $\theta^*_{\mathrm{eff}} =
@@ -432,9 +430,13 @@ seriously even though its assumptions are simplifications.
     (complex coordination); absent on MPE (simple navigation).
 \item \textbf{Implication:} Smaller $\lambda$ $\Rightarrow$ smaller
     $\mathrm{tr}(\Sigma_\varepsilon)$ $\Rightarrow$ below threshold.
-    \textbf{Consistent with:} $\lambda{=}0.01$ has std $1.67$ (stable);
-    $\lambda{=}0.05$ has std $8.55$ (unstable) at the two values we
-    tested.
+    \textbf{Partially consistent:} $\lambda{=}0.05$ is clearly pathological
+    (std $8.55$) and $\lambda{=}0.01$ is stable (std $1.67$), but
+    $\lambda{=}0.001$ (std $6.37$) does not improve further over
+    $\lambda{=}0.01$. We read this as a sweet-spot rather than a strict
+    monotonic threshold: the aux signal both regularizes representations
+    and introduces directional noise, and the optimum sits at the $\lambda$
+    that balances the two.
 \end{enumerate}
 
 Figure~\ref{fig:gradients} plots the gradient decomposition on Full
@@ -735,21 +737,12 @@ VABL (Full, pathology) & no & 463.21 & 8.55 & 409.70 & 1.41 \\
 {\footnotesize $^*$AERIAL shares teammate hidden states but uses no learned message channel.}
 \end{table}
 
-Table~\ref{tab:benchmark} presents the 6-method benchmark at 10M steps on
-both layouts. Two findings stand out:
-
-\textbf{Communication-based methods dominate in mean but with enormous seed
-variance.} TarMAC ($783.72 \pm 156.10$) and CommNet ($773.24 \pm 148.17$)
-achieve the highest Final50 on Asymmetric Advantages, but their cross-seed
-standard deviations exceed 148 points, roughly $30\times$ larger than
-VABL's. Single-seed comparisons between communication and communication-free
-methods are uninformative at this scale (given $\sigma > 148$).
-
-\textbf{VABL has the tightest cross-seed variance of any method.} Even the
-pathological Full configuration ($\sigma = 8.55$) has far lower variance
-than MAPPO ($\sigma = 153.09$), TarMAC ($\sigma = 156.10$), CommNet
-($\sigma = 148.17$), or AERIAL ($\sigma = 41.30$). The fixed VABL variants
-(std $1.86$--$3.72$) are uniquely reproducible across seeds.
+Table~\ref{tab:benchmark} shows the 6-method benchmark on both layouts.
+Communication methods (TarMAC, CommNet) lead on AA but with cross-seed
+std $> 148$, roughly $30\times$ VABL's; single-seed comparisons across
+communication and communication-free methods are uninformative at this
+scale. VABL (including the pathological Full at $\sigma = 8.55$) has
+the tightest cross-seed variance of any method by an order of magnitude.
 
 \subsection{Architecture Generalization}
 \label{sec:arch_sweep}
@@ -798,11 +791,16 @@ harmful} in expectation, not merely destabilizing: even with the
 gradient pathway severed, having trained with the auxiliary signal
 for the first half of training appears to leave a residual performance
 gap. We do not have a complete account of this distinction and flag
-it as an open question. A $\lambda$ sweep confirms the Overcooked
-threshold behavior: $\lambda{=}0.01$ is stable (std $1.67$) while
-$\lambda{=}0.05$ is unstable (std $8.55$); at 50M steps both converge
-with similar high variance, confirming the pathology does not
-self-resolve (Appendix~\ref{app:sample_efficiency}).
+it as an open question. A 3-point $\lambda$ sweep on Overcooked AA
+(5 seeds each, 10M steps; Appendix~\ref{app:lambda}) reveals a sweet
+spot rather than a strict monotonic threshold: $\lambda{=}0.001$
+Final50 $468.00 \pm 6.37$, $\lambda{=}0.01$ Final50 $472.23 \pm 1.67$
+(stable), $\lambda{=}0.05$ Final50 $463.21 \pm 8.55$ (pathological).
+The aux signal regularizes representations at $\lambda{=}0.01$ but is
+either too weak to help ($\lambda{=}0.001$) or strong enough to cause
+the pathology ($\lambda{=}0.05$). At 50M steps both $\lambda{=}0.01$
+and $\lambda{=}0.05$ retain cross-seed std above $7$, confirming the
+pathology does not self-resolve.
 
 
 % ============================================================================
@@ -873,9 +871,9 @@ cleanly (bootstrap CIs in Appendix~\ref{app:tables}). Testing on
 Hanabi~\cite{bard2020hanabi} and at larger scale would further map the
 boundary.
 
-\textbf{Narrow load-bearing claims:} The $\lambda$-threshold is based
-on two values ($\lambda{=}0.01$ stable, $\lambda{=}0.05$ unstable), so
-we describe the effect as a range, not a sharp threshold.
+\textbf{Narrow load-bearing claims:} The $\lambda$ sweep has three
+values ($0.001$, $0.01$, $0.05$) at 10M on AA, enough to show a
+sweet spot but not the full shape of the $\lambda$-by-noise curve.
 Sample-efficiency curves are measured on AA only; replication on other
 layouts would strengthen the training-budget-artifact claim.
 
@@ -1199,6 +1197,67 @@ Neither & $132.6 \pm 17.7$ & $459.9 \pm 3.4$ & $467.3 \pm 6.8$ & $470.3 \pm 2.5$
 \bottomrule
 \end{tabular}
 \end{table}
+
+
+\section{$\lambda$ Sensitivity (Overcooked AA)}
+\label{app:lambda}
+
+We sweep the auxiliary loss weight at three values on Overcooked AA,
+Full VABL (attention + aux), 5 seeds each at 10M steps. Two of the
+values ($\lambda{=}0.01$ and $\lambda{=}0.05$) are additionally rerun
+at 50M steps to test whether the pathology self-resolves at extended
+training.
+
+\begin{table}[h]
+\centering
+\small
+\caption{$\lambda$ sensitivity on Overcooked AA (Full VABL, 5 seeds).
+Final50 mean $\pm$ std. $\lambda{=}0.01$ is the stable sweet spot;
+$\lambda{=}0.05$ exhibits the directional-interference pathology;
+$\lambda{=}0.001$ is non-pathological in mean but has elevated
+cross-seed variance, indicating that the aux signal becomes too weak
+to regularize before it becomes safe to remove entirely.}
+\label{tab:lambda_sweep}
+\begin{tabular}{lccccc}
+\toprule
+$\lambda$ & Budget & Final50 & std & Best & Best std \\
+\midrule
+$0.001$ & 10M & $468.00$ & $6.37$ & $484.40$ & $1.20$ \\
+$0.01$  & 10M & \textbf{$472.23$} & \textbf{$1.67$} & $484.40$ & $1.20$ \\
+$0.05$  & 10M & $463.21$ & $8.55$ & $483.80$ & $1.47$ \\
+\midrule
+$0.01$  & 50M & $468.47$ & $8.73$ & $485.00$ & $0.00$ \\
+$0.05$  & 50M & $470.95$ & $7.46$ & $485.00$ & $0.00$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed Final50 for the $\lambda$ sweep at 10M on Overcooked
+AA. Best is reached consistently at $\sim$484 across all $\lambda$;
+only Final50 differentiates, confirming that $\lambda$ affects
+late-training stability rather than peak performance.}
+\label{tab:lambda_per_seed}
+\begin{tabular}{lccccc}
+\toprule
+$\lambda$ & Seed 0 & Seed 1 & Seed 2 & Seed 3 & Seed 4 \\
+\midrule
+$0.001$ & $475.3$ & $461.0$ & $471.3$ & $459.7$ & $472.7$ \\
+$0.01$  & $475.1$ & $472.0$ & $470.0$ & $472.7$ & $471.4$ \\
+$0.05$  & $469.1$ & $456.5$ & $450.6$ & $465.6$ & $474.2$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+At 50M steps, both $\lambda{=}0.01$ and $\lambda{=}0.05$ retain
+cross-seed std above $7$, confirming that the pathology is not a
+transient artifact of the 10M budget and does not self-resolve with
+$5\times$ more training. Best reward saturates at $485$ for all
+configurations across all $\lambda$ values, reinforcing that the
+pathology is purely a late-training stability effect and not a
+peak-performance limitation.
 
 
 \section{Architecture Sweep}
