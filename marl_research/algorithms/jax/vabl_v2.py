@@ -49,6 +49,12 @@ class VABLv2Config(NamedTuple):
     # revealed aux+attention interaction). See wiki/concepts/aux_loss_bug.md.
     stop_gradient_belief_to_aux: bool = False  # if True, aux head only trains itself, not the belief encoder
     aux_anneal_fraction: float = 0.0  # 0.0 = constant lambda; 0.X = anneal lambda to 0 over first X fraction of training
+    # Intra-actor control (added 2026-04-20): when True, the auxiliary predictor
+    # uses its OWN parallel encoder pipeline (phi_aux, psi_aux, belief_aux_dense).
+    # The policy's belief encoder is entirely shielded from auxiliary gradients.
+    # Tests whether the pathology is specifically due to the SHARED encoder, as
+    # opposed to attention-plus-aux being harmful anywhere.
+    separate_aux_encoder: bool = False
     n_agents: int = 2
     n_actions: int = 6
     obs_dim: int = 520
@@ -175,13 +181,45 @@ class VABLv2Agent(nn.Module):
         logits = nn.Dense(cfg.n_actions, name="policy_head",
                            kernel_init=orthogonal_init(0.01))(new_belief)
 
-        # 8. Aux head — small init for last layer
-        # When stop_gradient_belief_to_aux is set, the aux head only trains itself:
-        # gradients from aux_loss do not flow back into the belief encoder, the
-        # attention module, or the feature encoders. This tests whether the
-        # aux loss is harmful because it interferes with belief learning under
-        # attention (see wiki/concepts/aux_loss_bug.md).
-        belief_for_aux = jax.lax.stop_gradient(new_belief) if cfg.stop_gradient_belief_to_aux else new_belief
+        # 8. Aux head.
+        #
+        # Three mutually-exclusive variants (in priority order):
+        #   (i)  separate_aux_encoder: aux has its OWN parallel encoder
+        #        pipeline (phi_aux, psi_aux, pooling, belief projection). The
+        #        policy's belief encoder is entirely shielded from the
+        #        auxiliary gradient.
+        #   (ii) stop_gradient_belief_to_aux: aux reads from the shared belief
+        #        but gradients from aux_loss are blocked before they reach the
+        #        belief encoder.
+        #   (iii) default: aux reads from the shared belief with full gradient
+        #        flow back into the encoder pipeline (the configuration the
+        #        pathology manifests in).
+        if cfg.separate_aux_encoder:
+            # Independent feature encoders. Params are NOT shared with phi_net
+            # or psi_net used by the policy.
+            aux_h_obs = FeatureEncoder(cfg.embed_dim, name="phi_aux")(obs)
+            aux_action_encoder = ActionEncoder(cfg.embed_dim, name="psi_aux")
+            aux_h_actions = jax.vmap(aux_action_encoder)(teammate_actions_oh)
+            # Masked mean pooling (teammate actions in the aux pipeline are
+            # aggregated without the pathological attention path; the control
+            # tests the encoder sharing, not attention on the aux side).
+            aux_masked = aux_h_actions * vis_expanded
+            aux_n_visible = visibility_mask.sum() + 1e-8
+            aux_context = aux_masked.sum(axis=0) / aux_n_visible
+            # Project to a belief-dim representation for the aux head. Note:
+            # no recurrence here; the aux predictor sees only current-step
+            # features, which isolates the "shared encoder" question from
+            # belief propagation. GRU-for-aux could be added if needed.
+            aux_belief = nn.Dense(cfg.hidden_dim, name="belief_aux_proj",
+                                  kernel_init=orthogonal_init(1.414))(
+                jnp.concatenate([aux_h_obs, aux_context]))
+            aux_belief = nn.relu(aux_belief)
+            belief_for_aux = aux_belief
+        elif cfg.stop_gradient_belief_to_aux:
+            belief_for_aux = jax.lax.stop_gradient(new_belief)
+        else:
+            belief_for_aux = new_belief
+
         aux_h = nn.Dense(cfg.aux_hidden_dim, name="aux_h1",
                           kernel_init=orthogonal_init(1.414))(belief_for_aux)
         aux_h = nn.relu(aux_h)

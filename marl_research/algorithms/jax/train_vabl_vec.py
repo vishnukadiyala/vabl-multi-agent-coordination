@@ -381,6 +381,7 @@ def train_vabl_vec(
         "aux_lambda": float(config.aux_lambda),
         "stop_gradient_belief_to_aux": bool(config.stop_gradient_belief_to_aux),
         "aux_anneal_fraction": float(config.aux_anneal_fraction),
+        "separate_aux_encoder": bool(config.separate_aux_encoder),
         "n_agents": int(config.n_agents),
         "n_actions": int(config.n_actions),
         "obs_dim": int(config.obs_dim),
@@ -434,6 +435,8 @@ if __name__ == "__main__":
                         help="Stop aux gradients from flowing into the belief encoder.")
     parser.add_argument("--aux-anneal-fraction", type=float, default=0.0,
                         help="Linearly anneal aux_lambda to 0 over the first F of training (0 = constant).")
+    parser.add_argument("--separate-aux-encoder", action="store_true",
+                        help="Aux predictor uses its own parallel encoder (intra-actor control).")
     args = parser.parse_args()
 
     # Build config from CLI knobs
@@ -443,6 +446,7 @@ if __name__ == "__main__":
         aux_lambda=args.aux_lambda,
         stop_gradient_belief_to_aux=args.stop_gradient_belief,
         aux_anneal_fraction=args.aux_anneal_fraction,
+        separate_aux_encoder=args.separate_aux_encoder,
     )
 
     train_vabl_vec(
