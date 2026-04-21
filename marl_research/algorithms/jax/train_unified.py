@@ -291,6 +291,13 @@ if __name__ == "__main__":
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--log-interval", type=int, default=5)
     parser.add_argument("--save", default=None)
+    # AERIAL-specific aux-loss knobs (reviewer-requested fix-path experiment)
+    parser.add_argument("--aux-lambda", type=float, default=0.0,
+                        help="AERIAL aux-loss weight (0 = off)")
+    parser.add_argument("--no-aux-loss", action="store_true",
+                        help="Force aux loss off even if aux-lambda > 0")
+    parser.add_argument("--stop-gradient-belief", action="store_true",
+                        help="Stop aux gradients from flowing into the belief encoder (AERIAL)")
     args = parser.parse_args()
 
     if args.algo == "vabl":
@@ -308,7 +315,13 @@ if __name__ == "__main__":
         factory = lambda od, na, nact: TarMACImpl(TarMACConfig()._replace(obs_dim=od, n_agents=na, n_actions=nact))
     elif args.algo == "aerial":
         from marl_research.algorithms.jax.aerial_impl import AERIALConfig, AERIALImpl
-        factory = lambda od, na, nact: AERIALImpl(AERIALConfig()._replace(obs_dim=od, n_agents=na, n_actions=nact))
+        _use_aux = (args.aux_lambda > 0.0) and not args.no_aux_loss
+        factory = lambda od, na, nact: AERIALImpl(AERIALConfig()._replace(
+            obs_dim=od, n_agents=na, n_actions=nact,
+            aux_lambda=args.aux_lambda,
+            use_aux_loss=_use_aux,
+            stop_gradient_belief_to_aux=args.stop_gradient_belief,
+        ))
     elif args.algo == "commnet":
         from marl_research.algorithms.jax.commnet_impl import CommNetConfig, CommNetImpl
         factory = lambda od, na, nact: CommNetImpl(CommNetConfig()._replace(obs_dim=od, n_agents=na, n_actions=nact))

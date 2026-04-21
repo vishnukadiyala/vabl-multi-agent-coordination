@@ -34,6 +34,16 @@ class AERIALConfig(NamedTuple):
     n_agents: int = 2
     n_actions: int = 6
     obs_dim: int = 520
+    # Auxiliary-loss knobs for reviewer-requested AERIAL fix-path experiment
+    # (2026-04-20). Default aux_lambda=0.0 preserves the no-aux behavior used
+    # for the Section 6.1 AERIAL observation runs; aux_lambda>0 with
+    # use_aux_loss=True adds a VABL-style teammate-next-action prediction
+    # head so the "stop-gradient on belief into aux head" intervention can
+    # be tested on AERIAL.
+    aux_hidden_dim: int = 64
+    aux_lambda: float = 0.0
+    use_aux_loss: bool = False
+    stop_gradient_belief_to_aux: bool = False
 
 
 class AERIALAgent(nn.Module):
@@ -79,7 +89,25 @@ class AERIALAgent(nn.Module):
 
         # Policy head
         logits = nn.Dense(cfg.n_actions)(new_beliefs)
-        return logits, new_beliefs
+
+        # Aux head: predict each teammate's next action from the agent's
+        # own belief. Only instantiated when use_aux_loss=True so the
+        # default baseline's random-init trajectory is identical to the
+        # pre-aux-patch implementation.
+        n_teammates = n_agents - 1
+        if cfg.use_aux_loss:
+            if cfg.stop_gradient_belief_to_aux:
+                belief_for_aux = jax.lax.stop_gradient(new_beliefs)
+            else:
+                belief_for_aux = new_beliefs
+            aux_h = nn.Dense(cfg.aux_hidden_dim, name="aux_h1")(belief_for_aux)
+            aux_h = nn.relu(aux_h)
+            aux_logits_flat = nn.Dense(n_teammates * cfg.n_actions, name="aux_h2")(aux_h)
+            aux_logits = aux_logits_flat.reshape(n_agents, n_teammates, cfg.n_actions)
+        else:
+            aux_logits = jnp.zeros((n_agents, n_teammates, cfg.n_actions))
+
+        return logits, new_beliefs, aux_logits
 
 
 class AERIALCritic(nn.Module):
@@ -135,7 +163,7 @@ class AERIALImpl:
 
         def per_env(env_idx, env_obs, env_beliefs):
             rng_env = jax.random.fold_in(rng, env_idx)
-            logits, new_beliefs = self.agent_net.apply(agent_params, env_obs, env_beliefs)
+            logits, new_beliefs, _ = self.agent_net.apply(agent_params, env_obs, env_beliefs)
             def per_agent(i):
                 rng_i = jax.random.fold_in(rng_env, i)
                 action = jax.random.categorical(rng_i, logits[i])
@@ -150,13 +178,15 @@ class AERIALImpl:
         return jax.vmap(lambda s: self.critic_net.apply(critic_params, s))(state)
 
     def actor_loss(self, params, batch, clip_param, entropy_coef):
-        B = batch.obs.shape[0]
+        cfg = self.config
 
         def forward_one(env_obs, env_carry):
-            logits, _ = self.agent_net.apply(params, env_obs, env_carry)
-            return logits
+            logits, _, aux_logits = self.agent_net.apply(params, env_obs, env_carry)
+            return logits, aux_logits
 
-        all_logits = jax.vmap(forward_one)(batch.obs, batch.carry)
+        all_logits, all_aux = jax.vmap(forward_one)(batch.obs, batch.carry)
+        # all_logits: [B, n_agents, n_actions]
+        # all_aux:    [B, n_agents, n_teammates, n_actions]
 
         lp = jax.nn.log_softmax(all_logits)
         nlp = jnp.take_along_axis(lp, batch.actions[..., None], axis=-1).squeeze(-1).sum(axis=-1)
@@ -171,7 +201,26 @@ class AERIALImpl:
         ent = -(pr * lp).sum(axis=-1).mean(axis=-1)
         e_loss = -ent.mean()
 
-        return p_loss + entropy_coef * e_loss
+        # Aux loss: cross-entropy predicting each teammate's next action
+        # from the agent's own belief. Built with integer indexing (boolean
+        # masking is not jit-friendly).
+        n_agents = cfg.n_agents
+        if cfg.use_aux_loss:
+            aux_lp = jax.nn.log_softmax(all_aux, axis=-1)  # [B, n_agents, n_teammates, n_actions]
+            teammate_idx_per_agent = jnp.array(
+                [[j for j in range(n_agents) if j != i] for i in range(n_agents)],
+                dtype=jnp.int32,
+            )  # [n_agents, n_teammates]
+            # batch.next_actions: [B, n_agents]. Gather each agent's teammate actions.
+            teammate_targets = batch.next_actions[:, teammate_idx_per_agent]  # [B, n_agents, n_teammates]
+            aux_taken = jnp.take_along_axis(
+                aux_lp, teammate_targets[..., None], axis=-1
+            ).squeeze(-1)  # [B, n_agents, n_teammates]
+            aux_loss = -aux_taken.mean()
+            aux_term = cfg.aux_lambda * aux_loss
+        else:
+            aux_term = 0.0
+        return p_loss + entropy_coef * e_loss + aux_term
 
     def critic_loss(self, params, batch):
         vals = jax.vmap(lambda s: self.critic_net.apply(params, s))(batch.states)
