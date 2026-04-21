@@ -179,23 +179,23 @@ benchmark with anonymized code at
 % ============================================================================
 
 \paragraph{Auxiliary losses in RL.}
-UNREAL~\cite{jaderberg2016reinforcement} pioneered auxiliary tasks for
-representation shaping; subsequent work uses world-model
+UNREAL~\cite{jaderberg2016reinforcement} pioneered auxiliary tasks;
+subsequent work uses world-model
 losses~\cite{hafner2023mastering}, self-predictive
-representations~\cite{schwarzer2021dataefficient}, and contrastive
-objectives~\cite{laskin2020curl}.
-Lyle et al.~\cite{lyle2021effect} provide a theoretical analysis of
-how auxiliary tasks shape representation dynamics in TD-based deep RL,
-and Du et al.~\cite{du2018adapting} and Lin et al.~\cite{lin2019adaptive}
-both argue that constant auxiliary weights are suboptimal and propose
-adaptive schemes (cosine-similarity gating and online weighting,
-respectively) as remedies. In the MARL setting,
-XP-MARL~\cite{xu2024xpmarl} frames an auxiliary prioritization signal
-explicitly as a tool to manage co-learning non-stationarity. We
-instead \emph{characterize} the pathology:
-under MARL co-learning, constant weights destabilize attention-based
-encoders at long horizons, and three distinct gradient interventions
-converge to the same recovered regime.
+representations~\cite{schwarzer2021dataefficient,fang2024predictive},
+and contrastive objectives~\cite{laskin2020curl}. Theoretical analyses
+of auxiliary-task
+dynamics~\cite{lyle2021effect,voelcker2024selfprediction} cover TD and
+latent self-prediction; \cite{du2018adapting,lin2019adaptive} argue
+constant weights are suboptimal.
+\cite{moalla2024norepnotrust} document on-policy PPO representation
+collapse under non-stationarity; \cite{chua2024successor} show
+successor-feature losses collapse basis features to cosine-to-1,
+resolved by stop-gradient in the reward loss. In MARL,
+XP-MARL~\cite{xu2024xpmarl} uses auxiliary prioritization as a
+non-stationarity tool and BEPAL~\cite{huang2025bepal} adds prediction
+heads to CTDE belief encoders. None characterize the aux-to-encoder
+\emph{directional} gradient interference we identify.
 
 \paragraph{Attention in MARL.}
 AERIAL~\cite{phan2023attention} uses attention over teammate hidden states;
@@ -205,24 +205,29 @@ learning. None pair attention-based \emph{decentralized} belief encoding
 with an explicit auxiliary loss, the specific combination our ablation
 targets.
 
-\paragraph{Stop-gradient in SSL.}
+\paragraph{Stop-gradient in SSL and RL.}
 BYOL~\cite{grill2020bootstrap}, SimSiam~\cite{chen2021exploring}, and
-DINO~\cite{caron2021emerging} use stop-gradient to prevent representation
-collapse. Our stop-gradient fix path is analogous: it prevents the auxiliary
-loss from destabilizing the belief encoder via gradient interference.
+DINO~\cite{caron2021emerging} use stop-gradient to prevent
+representation collapse in self-supervised learning; Chua et
+al.~\cite{chua2024successor} apply the same mechanism to basis features
+in successor-feature learning. Our stop-gradient fix path is analogous:
+it prevents the auxiliary loss from destabilizing the belief encoder
+via gradient interference.
 
 \paragraph{Gradient interference.}
-PCGrad~\cite{yu2020gradient} and GradNorm~\cite{chen2018gradnorm}
-project or reweight conflicting task gradients by magnitude;
-HyperMARL~\cite{tessera2025hypermarl} decouples cross-agent gradient
-flow via hypernetworks; multi-timescale
-learning~\cite{nekoei2023dealing} slows partner updates to mitigate
-non-stationarity. Our pathology is qualitatively different: it is
-intra-agent (shared actor encoder), \emph{directional} rather than
-magnitude-driven (the auxiliary gradient is small at $<25\%$ magnitude
-ratio but erratically oriented under co-learning), and
-environment-dependent. Existing gradient-surgery frameworks target
-none of these signatures directly.
+PCGrad~\cite{yu2020gradient}, GradNorm~\cite{chen2018gradnorm},
+HyperMARL~\cite{tessera2025hypermarl}, and multi-timescale
+learning~\cite{nekoei2023dealing} project, reweight, or decouple
+gradients by magnitude or across agents. Direction-oriented
+MOO~\cite{xiao2023sdmgrad,zhang2025mgda,patapati2025graphcoloring}
+regularizes the conflict-avoidant direction or schedules by cosine
+interference. In offline MARL, \cite{tilbury2024coordination} identify
+a distinct directional pathology where data-mean-biased best responses
+steer joint gradients away from the optimum. Our pathology is
+intra-agent, \emph{directional} rather than magnitude-driven
+(aux gradient $<25\%$ of policy magnitude but erratically oriented
+under co-learning), and environment-dependent. Existing frameworks
+target none of these signatures.
 
 \paragraph{Coordination collapse.}
 Overcooked~\cite{carroll2019utility} is widely used for cooperative
@@ -232,9 +237,16 @@ decomposition~\cite{rashid2020monotonic}, and
 communication~\cite{das2019tarmac}. Cooperative MARL also exhibits
 named pathologies such as relative
 overgeneralization~\cite{wei2016lenient} and deep RL's late-training
-capacity loss~\cite{lyle2022capacity}. At 10M steps most reported
-``collapse'' is insufficient training; the residual instability we
-identify is distinct and gradient-mediated.
+capacity loss~\cite{lyle2022capacity}. Recent benchmarking studies show
+that algorithm rankings depend sharply on training budget: Formanek et
+al.~\cite{formanek2024mirage} find 75\% of offline MARL SOTA claims
+reverse under standardized budgets, and Papadopoulos et
+al.~\cite{papadopoulos2025extended} report high cross-seed variance on
+Overcooked even at 40M--100M steps. Standardized benchmarking
+infrastructure such as BenchMARL~\cite{bettini2024benchmarl} has been
+proposed as a community remedy. At 10M steps most reported ``collapse''
+is insufficient training; the residual instability we identify is
+distinct and gradient-mediated.
 
 
 % ============================================================================
@@ -500,11 +512,12 @@ parallel environments via JAX \texttt{vmap}.
 3 symmetric agents (5 discrete actions, obs dim 18, horizon 25). 100,000
 episodes ($\approx$2.5M env steps).
 
-\textbf{SMAX 3v3}~\cite{rutherford2023jaxmarl}: combat coordination with
+\textbf{SMAX 3v3}~\cite{rutherford2024jaxmarl}: combat coordination with
 3 allied agents against 3 heuristic enemies (obs dim 75, horizon 100).
-50,000 episodes ($\approx$5M env steps). SMAX is the JAX reimplementation
-introduced in JaxMARL, inspired by but distinct from the original
-SMAC~\cite{samvelyan2019starcraft}; it tests a fundamentally different
+50,000 episodes ($\approx$5M env steps). SMAX is JaxMARL's JAX
+reimplementation covering both original SMAC~\cite{samvelyan2019starcraft}
+and SMAC v2~\cite{ellis2023smacv2} scenarios; we use a 3v3 configuration
+with decentralized heuristic enemies. It tests a fundamentally different
 coordination domain (tactical combat vs.\ cooking/navigation).
 
 \subsection{Baselines}
@@ -515,7 +528,7 @@ We compare against four methods spanning three paradigms:
 \textbf{CommNet}~\cite{sukhbaatar2016commnet} (broadcast communication), and
 \textbf{AERIAL}~\cite{phan2023attention} (attention over teammate hidden
 states). All baselines are reimplemented in JAX~\cite{bradbury2018jax} using the
-JaxMARL framework~\cite{rutherford2023jaxmarl} and trained with the same
+JaxMARL framework~\cite{rutherford2024jaxmarl} and trained with the same
 hyperparameters, vectorized environment wrapper, and evaluation protocol.
 
 \subsection{Cross-Domain Test}
@@ -823,10 +836,28 @@ The architecture sweep (Table~\ref{tab:arch_sweep}) isolates the
 mechanism: mean pooling has no learned parameters for the auxiliary
 gradient to corrupt, while the MAAC-style critic configuration routes
 the aux gradient through the critic (value-only) rather than the actor's
-belief encoder (policy-corrupting). The pathology is thus specific to
-decentralized actor architectures with shared encoder parameters, and
-it survives independent swaps of recurrence (GRU, LSTM) and attention
-(cross, additive), ruling out a tuning artifact of any single choice.
+belief encoder (policy-corrupting). This aligns with Garcin et
+al.~\cite{garcin2025actorcritic}, who show that decoupled actor and
+critic representations specialize: the actor extracts action-relevant
+features while the critic absorbs value and dynamics information, and
+auxiliary-value information that is task-specific can increase the
+actor's generalization-harming mutual information. The pathology is
+thus specific to decentralized actor architectures with shared encoder
+parameters, and it survives independent swaps of recurrence (GRU, LSTM)
+and attention (cross, additive), ruling out a tuning artifact of any
+single choice.
+
+\paragraph{Concurrent MARL representational failures.}
+Contemporaneous work~\cite{weng2026exploration} identifies a related
+failure in parameter-shared DQN under exploration: shared
+representations lose action-discriminative capacity and action-value
+gaps contract (a magnitude signal). Our pathology differs in mechanism:
+directional interference between auxiliary and policy gradients within
+a single agent, diagnosed via cosine oscillation. The two findings
+suggest shared-representation MARL fails via distinct pathways,
+exploration-aggregation versus aux-to-encoder gradient interference,
+each with tailored fixes (grouped learning, state augmentation vs.
+stop-gradient, anneal, critic-side aux).
 
 \paragraph{Closing the loop on AERIAL.}
 The AERIAL signature in Section~\ref{sec:aerial_observation} (peak
