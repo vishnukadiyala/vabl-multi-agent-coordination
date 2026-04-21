@@ -57,40 +57,35 @@ A Cautionary Tale in Belief-Learning Multi-Agent Reinforcement Learning}
 \begin{abstract}
 Attention-based belief encoders trained with constant-weight auxiliary
 prediction losses are a widespread design pattern in cooperative
-multi-agent reinforcement learning (MARL). We identify a
-directional gradient-interference pathology in this pattern under
-co-learning non-stationarity. In our 10M-step reruns of the published
-AERIAL architecture~\cite{phan2023attention} on Overcooked Asymmetric
-Advantages, the 5-seed results exhibit a late-training drop: 4 of 5
-seeds reach peak $\sim$482 and then drift down to Final50 $\sim$463
-(drop $15.5 \pm 3.3$), while a fifth seed fails to converge at all
-(all-seed aggregate: drop $12.6 \pm 6.6$). To isolate the mechanism
-we construct VABL as a minimal architecture in the same class and run
-a 7-configuration ablation across three environment families
-(Overcooked, SMAX, MPE). On the Overcooked headline ablation the Full
-(attn+aux) cell is the only one that exhibits late-training instability
-(Cohen's $d = 1.40$ vs.\ No Aux); the pattern reproduces on SMAX
-($d = 1.26$) but is absent on the simpler MPE cooperative navigation,
-consistent with Proposition~\ref{prop:variance}'s environment-dependent
-threshold. On Overcooked, three gradient-targeted interventions all
-sever the auxiliary-to-encoder pathway and converge to the no-aux
-regime; on SMAX the same interventions reduce cross-seed variance but
-leave a residual mean gap, which we flag as an open question. A gradient
-decomposition on VABL reveals the auxiliary gradient is small in
-magnitude ($<25\%$ of the policy gradient) but oscillates erratically
-in direction, pointing to directional rather than magnitude-driven
-interference. A 60-run architecture sweep reproduces the effect at positive Cohen's
-$d$ in two of four attention-based actor configurations (GRU +
-additive, LSTM + cross-attention), with the other two too
-high-variance at $n=5$ to resolve an aux effect; mean pooling is
+multi-agent reinforcement learning (MARL). We identify a directional
+gradient-interference pathology in this pattern under co-learning
+non-stationarity. In 10M-step reruns of the published AERIAL
+architecture~\cite{phan2023attention} on Overcooked, most seeds
+exhibit a characteristic late-training drop after reaching peak
+reward; one seed fails to converge. To isolate the mechanism we
+construct VABL as a minimal architecture in the same class and run a
+7-configuration ablation across Overcooked, SMAX, and MPE. On the
+Overcooked headline ablation, the Full (attention + constant aux)
+cell is the only one that exhibits late-training instability; the
+pattern reproduces on SMAX but is absent on the simpler MPE
+cooperative navigation, consistent with
+Proposition~\ref{prop:variance}'s environment-dependent threshold. On
+Overcooked, three gradient-targeted interventions all sever the
+auxiliary-to-encoder pathway and converge to the no-aux regime; on
+SMAX the same interventions reduce cross-seed variance but leave a
+residual mean gap, which we flag as an open question. A gradient
+decomposition reveals the auxiliary gradient is small in magnitude
+relative to the policy gradient yet oscillates erratically in
+direction, pointing to directional rather than magnitude-driven
+interference. A 60-run architecture sweep reproduces the effect in
+two of four attention-based actor configurations; mean pooling is
 immune and critic-side auxiliary placement reverses the sign. We
 additionally show that ``coordination collapse'' on Overcooked is
-largely a training-budget artifact (collapse $<5\%$ at 10M steps). For
-practitioners, in the configurations we tested, any one of three
-gradient-pathway interventions is sufficient: $\lambda \leq 0.01$ or
-annealing, stop-gradient on the belief into the auxiliary head, or
-placing the auxiliary head on the centralized critic. Code, training
-logs, and per-seed JSON results for all 350{+} runs are available at
+largely a training-budget artifact. For practitioners on
+architectures in this class, any of $\lambda \leq 0.01$ or annealing,
+stop-gradient on the belief into the auxiliary head, or critic-side
+auxiliary placement suffices on Overcooked. Code, training logs, and
+per-seed results for all 350{+} runs are available at
 \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
 \end{abstract}
 
