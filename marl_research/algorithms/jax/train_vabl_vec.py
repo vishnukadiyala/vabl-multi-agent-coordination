@@ -6,7 +6,7 @@ identity-embedding indexing, visibility-mask application, and adds multi-head
 attention and orthogonal init. See wiki/concepts/aux_loss_bug.md for the
 rationale.
 
-This runner supports three aux-loss knobs exposed by VABLv2Config:
+This runner supports aux-loss knobs exposed by VABLv2Config:
   * use_aux_loss (bool): hard on/off switch for the aux loss term.
   * aux_lambda (float): the initial/constant aux loss weight.
   * stop_gradient_belief_to_aux (bool): when True, aux gradients never reach
@@ -14,6 +14,12 @@ This runner supports three aux-loss knobs exposed by VABLv2Config:
   * aux_anneal_fraction (float): 0.0 means constant lambda; values in (0, 1]
     linearly decay aux_lambda → 0 over the first `aux_anneal_fraction` of
     training iterations, held at 0 afterwards.
+  * aux_frozen_target_policy (runtime flag): when True, aux targets come from
+    a snapshot of the initial agent policy instead of the current teammates.
+    This removes co-learning non-stationarity from aux targets while
+    preserving aux capacity cost and the aux-to-encoder gradient pathway.
+    Used to distinguish the directional-interference hypothesis from a
+    generic aux-capacity-cost hypothesis.
 
 Usage:
     python -m marl_research.algorithms.jax.train_vabl_vec --layout cramped_room --episodes 5000 --n-envs 32
@@ -65,6 +71,7 @@ def train_vabl_vec(
     seed: int = 0,
     log_interval: int = 10,
     save_path: str = None,
+    aux_frozen_target_policy: bool = False,
 ):
     if config is None:
         config = VABLConfig()
@@ -175,6 +182,17 @@ def train_vabl_vec(
             return logits, aux
         return jax.vmap(forward_one)(flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
 
+    @jax.jit
+    def frozen_policy_argmax_actions(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx):
+        """Run a FROZEN policy snapshot on rollout obs/beliefs and return deterministic
+        argmax actions for each agent. Used to compute stationary aux targets that do
+        not drift with co-learning teammate policies.
+
+        Returns flat actions of shape [B*n_agents] (int32).
+        """
+        logits, _ = compute_logits_and_aux(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+        return jnp.argmax(logits, axis=-1).astype(jnp.int32)
+
     # Static scalar constants the jit should bake in from config
     _use_aux_loss = bool(config.use_aux_loss)
 
@@ -218,6 +236,15 @@ def train_vabl_vec(
             return ((vals - flat_returns) ** 2).mean()
         loss, grads = jax.value_and_grad(loss_fn)(critic_state.params)
         return critic_state.apply_gradients(grads=grads), loss
+
+    # Snapshot initial (pre-training) agent params for the frozen-target-policy
+    # experiment. When `aux_frozen_target_policy` is True, the aux targets are
+    # computed by running this frozen snapshot on rollout obs; the snapshot
+    # never updates, so aux targets remain stationary even as the live policy
+    # and its teammates co-learn.
+    frozen_agent_params = jax.tree_util.tree_map(lambda x: jnp.array(x, copy=True), agent_state.params)
+    if aux_frozen_target_policy:
+        print("  [aux-frozen-targets] snapshot taken; aux targets are stationary from iter 0")
 
     # ---- Training loop ----
     rewards_history = []
@@ -329,10 +356,25 @@ def train_vabl_vec(
 
         # Next-step teammate actions for auxiliary loss
         # Shift acts_NH by 1 along time axis: predict t+1 from belief at t
-        next_acts_NH = jnp.concatenate(
-            [acts_NH[:, 1:], jnp.zeros((n_envs, 1, n_agents), dtype=jnp.int32)], axis=1
-        )  # [N, H, n_agents]
-        next_t_acts_NHA = next_acts_NH[:, :, teammate_idx]  # [N, H, n_agents, n_teammates]
+        if aux_frozen_target_policy:
+            # Replace actual teammate-action targets with the FROZEN-POLICY's
+            # deterministic (argmax) actions on the same rollout obs/beliefs at
+            # step t+1. This keeps aux capacity, architecture, and the
+            # aux-to-encoder gradient pathway identical to Full, but decouples
+            # the *targets* from co-learning teammate policies.
+            frozen_actions_flat = frozen_policy_argmax_actions(
+                frozen_agent_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx
+            )  # [N*H*n_agents]
+            frozen_acts_NH_agents = frozen_actions_flat.reshape(n_envs, horizon, n_agents)
+            next_frozen_NH = jnp.concatenate(
+                [frozen_acts_NH_agents[:, 1:], jnp.zeros((n_envs, 1, n_agents), dtype=jnp.int32)], axis=1
+            )
+            next_t_acts_NHA = next_frozen_NH[:, :, teammate_idx]
+        else:
+            next_acts_NH = jnp.concatenate(
+                [acts_NH[:, 1:], jnp.zeros((n_envs, 1, n_agents), dtype=jnp.int32)], axis=1
+            )  # [N, H, n_agents]
+            next_t_acts_NHA = next_acts_NH[:, :, teammate_idx]  # [N, H, n_agents, n_teammates]
         flat_next_t_actions = next_t_acts_NHA.reshape(
             n_envs * horizon * n_agents, n_teammates).astype(jnp.int32)
 
@@ -382,6 +424,7 @@ def train_vabl_vec(
         "stop_gradient_belief_to_aux": bool(config.stop_gradient_belief_to_aux),
         "aux_anneal_fraction": float(config.aux_anneal_fraction),
         "separate_aux_encoder": bool(config.separate_aux_encoder),
+        "aux_frozen_target_policy": bool(aux_frozen_target_policy),
         "n_agents": int(config.n_agents),
         "n_actions": int(config.n_actions),
         "obs_dim": int(config.obs_dim),
@@ -437,6 +480,10 @@ if __name__ == "__main__":
                         help="Linearly anneal aux_lambda to 0 over the first F of training (0 = constant).")
     parser.add_argument("--separate-aux-encoder", action="store_true",
                         help="Aux predictor uses its own parallel encoder (intra-actor control).")
+    parser.add_argument("--aux-frozen-target-policy", action="store_true",
+                        help="Use a snapshot of the initial agent policy to generate aux targets; "
+                             "keeps aux capacity + gradient pathway but removes co-learning "
+                             "non-stationarity from targets (distinguishing experiment).")
     args = parser.parse_args()
 
     # Build config from CLI knobs
@@ -454,4 +501,5 @@ if __name__ == "__main__":
         layout=args.layout, n_episodes=args.episodes, horizon=args.horizon,
         n_envs=args.n_envs, seed=args.seed, log_interval=args.log_interval,
         save_path=args.save,
+        aux_frozen_target_policy=args.aux_frozen_target_policy,
     )
