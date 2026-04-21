@@ -115,32 +115,24 @@ artifact: collapse drops from $\sim$46\% at 500K to $<$3\% at 10M, and
 MAPPO, TarMAC, and CommNet all converge stably by 10M
 (Section~\ref{sec:budget}).
 
-\textbf{The design pattern and its reported instability.}
+\textbf{The design pattern and isolating its mechanism.}
 BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}
 combine attention-based belief encoders with constant-weight
-teammate-future-prediction aux. Dynamic Belief's Static-Belief
-ablation independently reports that naively co-trained
-teammate-action prediction drops success below the no-aux baseline,
-attributed to teammate non-stationarity. Our AERIAL port also shows a
-late-training drop but AERIAL has no aux, so its origin is distinct
-(\S\ref{sec:aerial_observation}).
-
-\textbf{Isolating the mechanism.} We construct \textbf{VABL}
-(Variational Attention-based Belief Learning), a minimal architecture
-in this design-pattern class with no learned message channel, no
-hidden-state sharing, and a cleanly separable auxiliary pathway. In
-our 7-config VABL ablation on Overcooked AA at 10M, the attention +
-constant-aux cell is the only one that exhibits late-training
-instability while every configuration reaches the same Best ceiling.
-The pathology reproduces on Cramped Room and on SMAX but is absent on
-MPE simple\_spread, consistent with
+teammate-future-prediction aux; Dynamic Belief's Static-Belief
+ablation independently reports that naive co-training drops success
+below no-aux, attributed to teammate non-stationarity. We construct
+\textbf{VABL}, a minimal architecture in this design-pattern class
+with a cleanly separable aux pathway. In our 7-config ablation on
+Overcooked AA at 10M, the attention + constant-aux cell is the only
+one with late-training instability while every configuration reaches
+the same Best ceiling. The pathology reproduces on Cramped Room and
+SMAX but is absent on MPE simple\_spread, consistent with
 Proposition~\ref{prop:variance}'s environment-dependent threshold.
 Three gradient-targeted interventions ($\lambda$-annealing,
-stop-gradient on belief into the auxiliary head, and both combined)
-converge to a single recovered regime statistically equivalent to
-removing the auxiliary loss. A CIFAR-100 cross-domain test finds the
-pathology absent in supervised learning, narrowing it to MARL's
-co-learning non-stationarity.
+stop-gradient on the belief into the aux head, and both combined)
+converge to a recovered regime statistically equivalent to removing
+aux. A CIFAR-100 cross-domain test finds the pathology absent in
+supervised learning, narrowing it to MARL co-learning non-stationarity.
 
 Our contributions: \textbf{(1)}~a directional
 gradient-interference pathology in the attention + constant-auxiliary
