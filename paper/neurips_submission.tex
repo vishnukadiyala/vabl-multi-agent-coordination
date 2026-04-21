@@ -60,33 +60,25 @@ prediction losses targeting teammate future behavior appear in recent
 cooperative multi-agent reinforcement learning (MARL) methods such as
 BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}.
 We identify a directional gradient-interference pathology in this
-design pattern under co-learning non-stationarity, building on Zhai et
-al.'s independent observation that naively co-trained teammate-action
-prediction can hurt decentralized policy learning. To isolate the
-mechanism we construct VABL as a minimal architecture in the same
-class and run a 7-configuration ablation across Overcooked, SMAX, and
-MPE. On the
-Overcooked headline ablation, the Full (attention + constant aux)
-cell is the only one that exhibits late-training instability; the
-pattern reproduces on SMAX but is absent on the simpler MPE
-cooperative navigation, consistent with
-Proposition~\ref{prop:variance}'s environment-dependent threshold. On
-Overcooked, three gradient-targeted interventions all sever the
-auxiliary-to-encoder pathway and converge to the no-aux regime; on
-SMAX the same interventions reduce cross-seed variance but leave a
-residual mean gap, which we flag as an open question. A gradient
-decomposition reveals the auxiliary gradient is small in magnitude
-relative to the policy gradient yet oscillates erratically in
-direction, pointing to directional rather than magnitude-driven
-interference. A 60-run architecture sweep reproduces the effect in
-two of four attention-based actor configurations; mean pooling is
-immune and critic-side auxiliary placement reverses the sign. We
-additionally show that ``coordination collapse'' on Overcooked is
-largely a training-budget artifact. For practitioners on
-architectures in this class, any of $\lambda \leq 0.01$ or annealing,
-stop-gradient on the belief into the auxiliary head, or critic-side
-auxiliary placement suffices on Overcooked. Code, training logs, and
-per-seed results for all 350{+} runs are available at
+design pattern under co-learning non-stationarity, building on Zhai
+et al.'s independent observation that naively co-trained
+teammate-action prediction can hurt decentralized policy learning. To
+isolate the mechanism we construct VABL as a minimal architecture in
+the same class and ablate it across Overcooked, SMAX, and MPE. The
+pathology appears only when attention and constant-weight aux
+co-occur, is environment-dependent (present on coordination-heavy
+Overcooked and SMAX, absent on simpler MPE navigation), and is
+driven by a small but directionally noisy auxiliary gradient rather
+than magnitude dominance. Three gradient-targeted interventions
+(annealing, stop-gradient on the belief, critic-side aux placement)
+converge to the no-aux regime on Overcooked; on SMAX they reduce
+cross-seed variance but leave a residual mean gap, which we flag as
+an open question. A follow-up architecture sweep shows the effect
+generalizes across attention-based actor variants, mean pooling is
+immune, and critic-side placement reverses the sign. We additionally
+show that the widely reported ``coordination collapse'' on Overcooked
+is largely a training-budget artifact. Code, training logs, and
+per-seed results for all 350{+} runs are at
 \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
 \end{abstract}
 
@@ -135,10 +127,8 @@ aux. A CIFAR-100 cross-domain test finds the pathology absent in
 supervised learning, narrowing it to MARL co-learning non-stationarity.
 
 Our contributions: \textbf{(1)}~a directional
-gradient-interference pathology in the attention + constant-auxiliary
-design pattern used by BEPAL~\cite{huang2025bepal} and
-Dynamic Belief~\cite{zhai2023dynamic}, isolated under controlled
-ablation in VABL, with
+gradient-interference pathology in the attention + constant-aux
+design pattern, isolated under controlled ablation in VABL, with
 environment-dependence (present on Overcooked and SMAX, absent on MPE);
 \textbf{(2)}~a descriptive stochastic model
 (Proposition~\ref{prop:variance}, bound scaling with
@@ -422,8 +412,8 @@ both regularizes representations and introduces directional noise, and
 the optimum balances the two.
 
 Figure~\ref{fig:gradients} plots the gradient decomposition on Full
-VABL (AA). The directional instability persists even as the auxiliary
-gradient decreases across training, confirming a directional rather
+VABL (AA). The instability persists even as the auxiliary gradient
+magnitude decreases across training, confirming a directional rather
 than magnitude-driven mechanism.
 
 \begin{figure}[t]
@@ -670,7 +660,7 @@ the AA pattern where non-attention cells are harder to resolve at $n=5$.
 
 \begin{table}[t]
 \centering
-\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding, since no method collapses at 10M, and are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL and AERIAL embody among methods evaluated.}
+\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with $30{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding, since no method collapses at 10M. They are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL embodies among methods evaluated.}
 \label{tab:benchmark}
 \small
 \setlength{\tabcolsep}{3pt}
