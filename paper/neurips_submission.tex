@@ -67,13 +67,15 @@ seeds reach peak $\sim$482 and then drift down to Final50 $\sim$463
 (all-seed aggregate: drop $12.6 \pm 6.6$). To isolate the mechanism
 we construct VABL as a minimal architecture in the same class and run
 a 7-configuration ablation across three environment families
-(Overcooked, SMAX, MPE). The pathology manifests on Overcooked
-(Cohen's $d$ up to $5.06$) and SMAX ($d = 1.26$) but not on the
-simpler MPE (cooperative navigation), consistent with our theoretical
-prediction of environment-dependent instability thresholds. Three
-gradient-targeted interventions all sever the auxiliary-to-encoder
-gradient pathway and all converge to the no-aux regime, isolating
-that pathway as the necessary conduit for the instability. A gradient
+(Overcooked, SMAX, MPE). On the Overcooked headline ablation the Full
+(attn+aux) cell is the only one that exhibits late-training instability
+(Cohen's $d = 1.40$ vs.\ No Aux); the pattern reproduces on SMAX
+($d = 1.26$) but is absent on the simpler MPE cooperative navigation,
+consistent with Proposition~\ref{prop:variance}'s environment-dependent
+threshold. On Overcooked, three gradient-targeted interventions all
+sever the auxiliary-to-encoder pathway and converge to the no-aux
+regime; on SMAX the same interventions reduce cross-seed variance but
+leave a residual mean gap, which we flag as an open question. A gradient
 decomposition on VABL reveals the auxiliary gradient is small in
 magnitude ($<25\%$ of the policy gradient) but oscillates erratically
 in direction, pointing to directional rather than magnitude-driven
@@ -146,15 +148,16 @@ gradient-interference pathology in the attention + constant-auxiliary
 design pattern under MARL co-learning, observed in published
 AERIAL~\cite{phan2023attention} and isolated in VABL, with
 environment-dependence (present on Overcooked and SMAX, absent on MPE);
-\textbf{(2)}~a theoretical analysis
+\textbf{(2)}~a descriptive stochastic model
 (Proposition~\ref{prop:variance}, bound scaling with
 $\mathrm{tr}(\Sigma_\varepsilon)/\lambda_{\min}(H)$) and gradient
 decomposition showing the mechanism is directional, not
 magnitude-driven; \textbf{(3)}~three gradient-targeted fix paths
 ($\lambda{\leq}0.01$ or annealing, stop-gradient on the belief, or
 critic-side auxiliary placement) that all sever the aux-to-encoder
-pathway and recover to the no-aux regime, generalized in a 60-run
-architecture sweep (Table~\ref{tab:arch_sweep}); \textbf{(4)}~evidence
+pathway and recover to the no-aux regime on Overcooked (on SMAX they
+reduce variance but leave a residual mean gap; see \S\ref{sec:budget}),
+generalized in a 60-run architecture sweep (Table~\ref{tab:arch_sweep}); \textbf{(4)}~evidence
 that the much-reported Overcooked coordination collapse is largely a
 training-budget artifact, plus a reproducible 350{+}-run, 5-seed
 benchmark with anonymized code at
@@ -312,7 +315,7 @@ this pathway as the source of the late-training instability.
 
 
 % ============================================================================
-\section{Theoretical Analysis: Directional Interference}
+\section{Descriptive Model: Directional Interference}
 \label{sec:theory}
 % ============================================================================
 
@@ -391,9 +394,10 @@ $\mathrm{tr}(\Sigma_\delta) = \alpha^2 \sum_i
 $\lambda_{\min}(H)$. Full derivation in Appendix~\ref{app:proof}.
 \end{proof}
 
-\paragraph{Qualitative implications and empirical consistency.}
-Five implications of Eq.~\eqref{eq:variance_bound} align with our
-experiments (consistencies, not \emph{a priori} predictions):
+\paragraph{Qualitative consistencies with experiment.}
+Five qualitative implications of Eq.~\eqref{eq:variance_bound} align
+with our experiments (post-hoc consistencies, not \emph{a priori}
+predictions):
 (i)~attention amplifies $\Sigma_\varepsilon$ via multiplicative
 belief-query coupling, matching Full VABL's std $8.55$ vs.\ $1.86$--$3.72$
 for alternatives;
@@ -829,13 +833,15 @@ not a control for the design-pattern pathology.
 We identify a directional gradient-interference pathology in
 attention-based belief encoders trained with constant-weight auxiliary
 losses, first observed in published AERIAL at 10M and isolated in VABL
-under controlled ablation. Three gradient-targeted interventions all
-sever the auxiliary-to-encoder pathway and converge to the no-aux
-regime, identifying it as the necessary conduit. Any of $\lambda \leq
-0.01$ or annealing, stop-gradient on the belief into the auxiliary
-head, or critic-side auxiliary placement suffices; we additionally find
-that the widely reported Overcooked coordination collapse is largely a
-training-budget artifact.
+under controlled ablation. On Overcooked, three gradient-targeted
+interventions all sever the auxiliary-to-encoder pathway and converge
+to the no-aux regime, identifying it as the necessary conduit; on
+SMAX, the same interventions reduce cross-seed variance but leave a
+residual mean gap. For practitioners, any of $\lambda \leq 0.01$ or
+annealing, stop-gradient on the belief into the auxiliary head, or
+critic-side auxiliary placement suffices on Overcooked; we additionally
+find that the widely reported Overcooked coordination collapse is
+largely a training-budget artifact.
 
 
 % ============================================================================
