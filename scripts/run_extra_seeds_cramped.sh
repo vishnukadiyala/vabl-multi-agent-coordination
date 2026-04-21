@@ -1,6 +1,6 @@
 #!/bin/bash
 # Extra 5 seeds (5-9) of Full and No-Attn on Overcooked Cramped Room.
-# Combined with existing seeds 0-4 (results/celestia_pull/phase2_cramped/)
+# Combined with existing seeds 0-4 (results/remote_pull/phase2_cramped/)
 # this gives n=10 for the cells whose bootstrap CI currently crosses zero.
 #
 # Rationale: the Cramped Room No-Attention vs Full comparison has bootstrap
@@ -8,12 +8,12 @@
 # worse than mean+aux) is consistent with the AA finding, but the statistical
 # test does not resolve the comparison. Need more seeds.
 #
-# Total: 2 configs x 5 seeds = 10 runs, ~1h on Celestia 5090 (Cramped Room
+# Total: 2 configs x 5 seeds = 10 runs, ~1h on an RTX 5090 GPU (Cramped Room
 # is smaller than AA, so should be faster per seed).
 # Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+# Usage (on the training GPU server):
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_extra_seeds_cramped.sh 2>&1 | tee results/logs/extra_seeds_cramped.log
 
 set -u

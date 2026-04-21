@@ -21,11 +21,11 @@
 # regime; if it fails, the AERIAL pathology has a component our mechanism
 # does not explain.
 #
-# Total: 2 configs x 3 seeds = 6 runs, ~1h on Celestia 5090.
+# Total: 2 configs x 3 seeds = 6 runs, ~1h on an RTX 5090 GPU.
 # Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+# Usage (on the training GPU server):
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_aerial_fix_path.sh 2>&1 | tee results/logs/aerial_fix_path.log
 
 set -u

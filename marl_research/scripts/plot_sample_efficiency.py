@@ -10,7 +10,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 
-BASE = pathlib.Path(r"C:\Users\Vishnu Kadiyala\VS Code\ICML\results")
+BASE = pathlib.Path(__file__).resolve().parents[2] / "results"
 
 FILES = {
     "Simple": {
@@ -128,7 +128,7 @@ for ax_idx, threshold in enumerate(THRESHOLDS):
 fig.suptitle("Sample Efficiency Comparison", fontsize=13, fontweight="bold", y=1.01)
 fig.tight_layout()
 
-out_path = pathlib.Path(r"C:\Users\Vishnu Kadiyala\VS Code\ICML\figures\sample_efficiency.png")
+out_path = pathlib.Path(__file__).resolve().parents[2] / "figures" / "sample_efficiency.png"
 out_path.parent.mkdir(parents=True, exist_ok=True)
 fig.savefig(out_path, dpi=300, bbox_inches="tight", facecolor="white")
 print(f"Figure saved to: {out_path}")

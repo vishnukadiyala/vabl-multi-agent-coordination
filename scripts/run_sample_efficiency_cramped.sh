@@ -8,9 +8,9 @@
 #
 # Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
+# Usage (on the training GPU server):
 #   screen -S se_cramped
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_sample_efficiency_cramped.sh 2>&1 | tee results/se_cramped.log
 
 set -u

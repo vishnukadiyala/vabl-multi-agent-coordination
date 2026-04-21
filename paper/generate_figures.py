@@ -326,7 +326,7 @@ def fig6_gradients():
     # Seed 0 only (cleaner than overlaying all 5); caption already notes
     # the pattern is consistent across all 5 seeds with cosine range
     # [-0.47, +0.33].
-    d = json.load(open("results/celestia_pull/gradient_diagnostics.json"))['diagnostic']
+    d = json.load(open("results/remote_pull/gradient_diagnostics.json"))['diagnostic']
 
     fig, axes = plt.subplots(1, 3, figsize=(10.5, 3.2))
     ax_mag, ax_cos, ax_rat = axes

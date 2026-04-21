@@ -8,11 +8,11 @@
 # (~473) but can't be statistically distinguished from either at n=5.
 # Running to n=10 to resolve whether the partial-recovery pattern is real.
 #
-# Total: 5 runs, ~1h on Celestia 5090. Crash recovery: skips existing JSONs.
+# Total: 5 runs, ~1h on an RTX 5090 GPU. Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
+# Usage (on the training GPU server):
 #   screen -S sep_enc_extra
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_extra_seeds_sep_encoder.sh 2>&1 | tee results/logs/sep_encoder_extra.log
 
 set -u

@@ -533,8 +533,8 @@ def main():
     )
     parser.add_argument(
         "--wandb-entity",
-        default="vishnupk",
-        help="Wandb entity (username/team)"
+        default=None,
+        help="Wandb entity (username/team); defaults to your wandb default"
     )
 
     args = parser.parse_args()

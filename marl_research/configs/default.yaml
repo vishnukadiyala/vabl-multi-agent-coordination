@@ -32,7 +32,7 @@ logging:
   use_wandb: true
   use_tensorboard: true
   wandb_project: "vabl_icml2026"
-  wandb_entity: "vishnupk"  # Your wandb username
+  wandb_entity: null  # Set to your wandb username (team or user)
   log_level: "INFO"
 
 # Hardware

@@ -19,9 +19,9 @@
 # All runs use 25000 episodes x 64 envs = 1.6M envsteps/episode = ~10M total
 # environment steps per run. Same horizon (400) as the rebuttal experiments.
 #
-# Usage (on Celestia):
+# Usage (on the training GPU server):
 #   screen -S phase2_minimal
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_phase2_minimal.sh 2>&1 | tee results/phase2_minimal.log
 #
 # Crash recovery: each run saves its own JSON. If a run already exists in

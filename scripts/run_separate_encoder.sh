@@ -11,13 +11,13 @@
 # pathology PERSISTS, the finding refines to attention+aux-anywhere.
 #
 # Matrix: Full (attn+aux with separate aux encoder) x 5 seeds on Overcooked AA.
-# Total: 5 runs, ~1h on Celestia 5090.
+# Total: 5 runs, ~1h on an RTX 5090 GPU.
 #
 # Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
+# Usage (on the training GPU server):
 #   screen -S sep_encoder
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_separate_encoder.sh 2>&1 | tee results/separate_encoder.log
 
 set -u

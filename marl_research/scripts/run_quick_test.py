@@ -70,7 +70,7 @@ def main():
                         help='Device to use (auto will use GPU if available)')
     parser.add_argument('--wandb', action='store_true', help='Enable wandb logging')
     parser.add_argument('--wandb-project', type=str, default='vabl_icml2026', help='Wandb project name')
-    parser.add_argument('--wandb-entity', type=str, default='vishnupk', help='Wandb entity (username/team)')
+    parser.add_argument('--wandb-entity', type=str, default=None, help='Wandb entity (username/team); defaults to your wandb default')
     args = parser.parse_args()
 
     device = get_device(args.device)

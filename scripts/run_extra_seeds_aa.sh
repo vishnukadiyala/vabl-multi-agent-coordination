@@ -4,13 +4,13 @@
 # Combined with existing seeds 0-4 this gives n=10 for the two cells that
 # matter most for the Limitations "statistical power" claim.
 #
-# Total: 2 configs x 5 new seeds = 10 runs, ~1h on Celestia 5090.
+# Total: 2 configs x 5 new seeds = 10 runs, ~1h on an RTX 5090 GPU.
 #
 # Crash recovery: skips existing JSONs.
 #
-# Usage (on Celestia):
+# Usage (on the training GPU server):
 #   screen -S extra_seeds
-#   cd ~/projects/VABL/vabl-multi-agent-coordination
+#   cd ~/aux-loss-considered-harmful
 #   bash scripts/run_extra_seeds_aa.sh 2>&1 | tee results/extra_seeds_aa.log
 
 set -u

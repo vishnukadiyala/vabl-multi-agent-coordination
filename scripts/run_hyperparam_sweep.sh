@@ -15,7 +15,7 @@
 # variance) should appear for all head counts in {1, 2, 4, 8}. If heads=1 or
 # heads=8 reverse or eliminate the pathology, the framing shifts.
 #
-# Runtime: ~8 min per run at 101 ep/s scan rollout = ~2h total on Celestia.
+# Runtime: ~8 min per run at 101 ep/s scan rollout = ~2h total on the training GPU.
 
 set -u
 
