@@ -1,0 +1,26 @@
+# Overcooked Experiment Configuration
+defaults:
+  - /default
+  - /algorithm: mappo
+  - /environment: overcooked
+  - _self_
+
+experiment:
+  name: "overcooked_experiment"
+  total_timesteps: 5000000
+
+# Overcooked layouts for evaluation
+layouts:
+  coordination:
+    - "cramped_room"
+    - "asymmetric_advantages"
+  complex:
+    - "coordination_ring"
+    - "forced_coordination"
+    - "counter_circuit"
+
+# Partner adaptation settings (for zero-shot coordination)
+partner_adaptation:
+  self_play: true
+  population_based: false
+  population_size: 5

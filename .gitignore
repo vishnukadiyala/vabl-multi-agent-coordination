@@ -1,0 +1,142 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Results and logs
+results/
+outputs/
+logs/
+*.log
+wandb/
+
+# Model checkpoints
+*.pt
+*.pth
+*.ckpt
+
+# StarCraft II replays
+*.SC2Replay
+
+# TensorBoard
+events.out.tfevents.*
+
+# Hydra outputs
+multirun/
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# Claude Code local data
+.claude/
+
+# Camera-ready archive (rebuttal-era code and results, frozen snapshot)
+# See pre_camera_ready_2026-04-08/README.md for rationale
+pre_camera_ready_2026-04-08/
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.synctex(busy)
+*.toc
+*.lof
+*.lot
+*.nav
+*.snm
+
+# Celestia result pulls (transient)
+/results/celestia_pull/
+
+# Generated images at root (keep figures/ for curated ones)
+/*.png
+
+# PDF files
+*.pdf
+
+*.md
+# Temporary/debug scripts at root level
+/debug_*.py
+/test_*.py
+/analyze_*.py
+/quick_test.py
+/run_experiment.bat
+/plot_*.py
+/generate_*.py
+/build_*.py
+/run_*.py
+/final_*.py
+vision_experiment/data/
+vision_experiment/results/

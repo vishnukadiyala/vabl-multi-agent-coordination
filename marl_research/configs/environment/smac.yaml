@@ -1,0 +1,32 @@
+# SMAC Environment Configuration
+name: "smac"
+map_name: "3m"  # Options: 2s3z, 3m, 8m, 3s5z, 1c3s5z, etc.
+
+# Environment settings
+difficulty: "7"
+game_version: null
+move_amount: 2
+continuing_episode: false
+obs_all_health: true
+obs_own_health: true
+obs_last_action: false
+obs_pathing_grid: false
+obs_terrain_height: false
+obs_instead_of_state: false
+state_last_action: true
+state_timestep_number: false
+reward_sparse: false
+reward_only_positive: true
+reward_death_value: 10
+reward_win: 200
+reward_defeat: 0
+reward_negative_scale: 0.5
+reward_scale: true
+reward_scale_rate: 20
+replay_dir: ""
+replay_prefix: ""
+window_size_x: 1920
+window_size_y: 1200
+heuristic_ai: false
+heuristic_rest: false
+debug: false

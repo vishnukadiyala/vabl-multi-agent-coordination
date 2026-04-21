@@ -1,0 +1,13 @@
+# IPPO (Independent PPO) Algorithm Configuration
+
+name: "ippo"
+
+# Network architecture
+hidden_dim: 64
+
+# PPO hyperparameters
+clip_param: 0.2
+ppo_epochs: 4
+value_loss_coef: 0.5
+entropy_coef: 0.01
+gae_lambda: 0.95

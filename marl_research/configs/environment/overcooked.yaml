@@ -1,0 +1,26 @@
+# Overcooked Environment Configuration
+name: "overcooked"
+layout_name: "cramped_room"  # Options: cramped_room, asymmetric_advantages, coordination_ring, forced_coordination, counter_circuit
+
+# Environment settings
+horizon: 400
+num_agents: 2
+
+# Reward shaping - provides intermediate rewards for progress
+# This helps with the extremely sparse reward problem in Overcooked
+use_shaped_rewards: true
+shaped_reward_scale: 1.0
+
+# Individual shaped reward values (optional overrides)
+# shaped_rewards:
+#   pickup_onion: 3.0
+#   pickup_tomato: 3.0
+#   place_in_pot: 5.0
+#   pickup_dish: 2.0
+#   pickup_soup: 8.0
+#   deliver_soup: 20.0
+#   pot_cooking: 1.0
+
+# Rendering
+render: false
+render_fps: 30

@@ -1,0 +1,31 @@
+# SMAC V2 Experiment Configuration
+defaults:
+  - /default
+  - /algorithm: qmix
+  - /environment: smac_v2
+  - _self_
+
+experiment:
+  name: "smac_v2_experiment"
+  total_timesteps: 2000000
+
+# SMAC V2 scenarios with distribution shift
+scenarios:
+  terran:
+    - "terran_5_vs_5"
+    - "terran_10_vs_10"
+  zerg:
+    - "zerg_5_vs_5"
+    - "zerg_10_vs_10"
+  protoss:
+    - "protoss_5_vs_5"
+    - "protoss_10_vs_10"
+
+# Distribution shift configurations
+distribution_shift:
+  training:
+    start_positions: "fixed"
+    unit_types: "fixed"
+  evaluation:
+    start_positions: "random"
+    unit_types: "random"

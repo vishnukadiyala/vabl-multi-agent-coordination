@@ -1,0 +1,14 @@
+# MAVEN (Multi-Agent Variational Exploration) Algorithm Configuration
+# Based on "MAVEN: Multi-Agent Variational Exploration" (Mahajan et al., 2019)
+
+name: "maven"
+
+# Network architecture
+hidden_dim: 64
+rnn_hidden_dim: 64
+latent_dim: 8  # Dimension of latent variable z
+embed_dim: 32  # Mixing network embed dim
+
+# Loss weights
+mi_weight: 0.01  # Mutual information loss weight
+kl_weight: 0.001  # KL divergence loss weight

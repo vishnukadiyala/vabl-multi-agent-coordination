@@ -1,0 +1,41 @@
+# Default configuration for MARL experiments
+defaults:
+  - _self_
+  - algorithm: qmix
+  - environment: smac
+
+# Experiment settings
+experiment:
+  name: "default_experiment"
+  seed: 42
+  num_seeds: 5
+  save_dir: "results"
+  log_interval: 1000
+  eval_interval: 10000
+  save_interval: 50000
+  total_timesteps: 2000000
+
+# Training settings
+training:
+  batch_size: 32
+  buffer_size: 5000
+  lr: 0.0005
+  gamma: 0.99
+  target_update_interval: 200
+  grad_clip: 10.0
+  epsilon_start: 1.0
+  epsilon_finish: 0.05
+  epsilon_anneal_time: 50000
+
+# Logging
+logging:
+  use_wandb: true
+  use_tensorboard: true
+  wandb_project: "vabl_icml2026"
+  wandb_entity: null  # Set to your wandb username (team or user)
+  log_level: "INFO"
+
+# Hardware
+hardware:
+  device: "auto"  # auto, cpu, cuda, cuda:0, etc.
+  num_workers: 4

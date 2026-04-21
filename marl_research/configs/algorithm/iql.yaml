@@ -1,0 +1,11 @@
+# Independent Q-Learning Configuration
+name: "iql"
+
+# Network architecture
+agent_network:
+  hidden_dim: 64
+  rnn_hidden_dim: 64
+  use_rnn: true
+
+# Training specific
+double_q: true

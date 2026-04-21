@@ -1,0 +1,26 @@
+# SMAC Experiment Configuration
+defaults:
+  - /default
+  - /algorithm: qmix
+  - /environment: smac
+  - _self_
+
+experiment:
+  name: "smac_experiment"
+  total_timesteps: 2000000
+
+# SMAC-specific maps to evaluate
+maps:
+  easy:
+    - "2s3z"
+    - "3m"
+    - "8m"
+  hard:
+    - "3s5z"
+    - "5m_vs_6m"
+    - "8m_vs_9m"
+  super_hard:
+    - "3s5z_vs_3s6z"
+    - "6h_vs_8z"
+    - "corridor"
+    - "MMM2"

@@ -1,0 +1,10 @@
+# Ego-centric Partially Observable Overcooked
+# Each agent sees only cells within view_radius Manhattan distance
+# Following OvercookedV2 (Rutherford et al., 2024) approach
+name: "overcooked_ego"
+layout_name: "asymmetric_advantages"
+num_agents: 2
+horizon: 400
+view_radius: 3
+use_shaped_rewards: true
+shaped_reward_scale: 1.0

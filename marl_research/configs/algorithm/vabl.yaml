@@ -1,0 +1,45 @@
+# VABL (Variational Attention-based Belief Learning) Algorithm Configuration
+# Based on ICML 2026 paper: "Implicit Coordination via Attention-Driven Latent
+# Belief Representations in Partially Observable Environments"
+
+name: "vabl"
+
+# Network architecture (from paper Section 5.6)
+embed_dim: 64        # d_e for action/obs embeddings
+hidden_dim: 128      # d_h for GRU/belief state
+attention_dim: 64    # d_k for attention
+
+# Auxiliary loss - kept small, belief learning is main benefit
+aux_lambda: 0.05     # lambda weight for auxiliary loss
+aux_hidden_dim: 64   # Hidden dim in aux predictor MLP
+
+# Critic (centralized, for PPO)
+critic_hidden_dim: 128
+
+# PPO hyperparameters (matched to MAPPO for fair comparison)
+clip_param: 0.2      # PPO clip parameter
+ppo_epochs: 10       # Number of PPO epochs per batch (matched to MAPPO)
+value_clip: 0.2      # Value function clipping
+value_loss_coef: 0.5
+entropy_coef: 0.01   # Entropy bonus for exploration
+gae_lambda: 0.95     # GAE lambda for advantage estimation
+
+# Separate learning rates (like MAPPO)
+actor_lr: 0.0005
+critic_lr: 0.0005
+
+# Ablation parameters (for sweep experiments)
+warmup_steps: 50             # Steps before starting to anneal auxiliary loss
+attention_heads: 4           # Number of attention heads in MHA
+stop_gradient_belief: false  # If true, detach beliefs in auxiliary loss (ablation)
+aux_decay_rate: 1.0          # No decay - keep aux loss constant
+min_aux_lambda: 0.0          # Minimum auxiliary loss weight
+
+# Ablation toggles
+use_attention: true          # If false, use mean pooling instead of attention
+use_aux_loss: true           # If false, disable auxiliary loss entirely
+
+# Training stability
+use_value_norm: true         # PopArt-style value normalization for stability
+use_orthogonal_init: true    # Orthogonal weight initialization (like MAPPO)
+use_identity_encoding: true  # Add teammate identity embeddings to attention keys/values
