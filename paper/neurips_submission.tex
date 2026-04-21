@@ -56,15 +56,16 @@ A Cautionary Tale in Belief-Learning Multi-Agent Reinforcement Learning}
 
 \begin{abstract}
 Attention-based belief encoders trained with constant-weight auxiliary
-prediction losses are a widespread design pattern in cooperative
-multi-agent reinforcement learning (MARL). We identify a directional
-gradient-interference pathology in this pattern under co-learning
-non-stationarity. In 10M-step reruns of the published AERIAL
-architecture~\cite{phan2023attention} on Overcooked, most seeds
-exhibit a characteristic late-training drop after reaching peak
-reward; one seed fails to converge. To isolate the mechanism we
-construct VABL as a minimal architecture in the same class and run a
-7-configuration ablation across Overcooked, SMAX, and MPE. On the
+prediction losses targeting teammate future behavior appear in recent
+cooperative multi-agent reinforcement learning (MARL) methods such as
+BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}.
+We identify a directional gradient-interference pathology in this
+design pattern under co-learning non-stationarity, building on Zhai et
+al.'s independent observation that naively co-trained teammate-action
+prediction can hurt decentralized policy learning. To isolate the
+mechanism we construct VABL as a minimal architecture in the same
+class and run a 7-configuration ablation across Overcooked, SMAX, and
+MPE. On the
 Overcooked headline ablation, the Full (attention + constant aux)
 cell is the only one that exhibits late-training instability; the
 pattern reproduces on SMAX but is absent on the simpler MPE
@@ -114,22 +115,25 @@ artifact: collapse drops from $\sim$46\% at 500K to $<$3\% at 10M, and
 MAPPO, TarMAC, and CommNet all converge stably by 10M
 (Section~\ref{sec:budget}).
 
-\textbf{One architectural class still degrades at 10M steps.} In our
-10M-step reruns of AERIAL~\cite{phan2023attention}, 4 of 5 seeds show
-a characteristic 10--20-point late-training drop after peak; one fails
-to converge (per-seed data in \S\ref{sec:aerial_observation}). This
-residual drop is a distinct, gradient-mediated pathology, not the
-short-horizon collapse reported in earlier literature.
+\textbf{The design pattern and its reported instability.}
+BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}
+combine attention-based belief encoders with constant-weight
+teammate-future-prediction aux. Dynamic Belief's Static-Belief
+ablation independently reports that naively co-trained
+teammate-action prediction drops success below the no-aux baseline,
+attributed to teammate non-stationarity. Our AERIAL port also shows a
+late-training drop but AERIAL has no aux, so its origin is distinct
+(\S\ref{sec:aerial_observation}).
 
 \textbf{Isolating the mechanism.} We construct \textbf{VABL}
 (Variational Attention-based Belief Learning), a minimal architecture
-in the same class with no learned message channel, no hidden-state
-sharing, and a cleanly separable auxiliary pathway. In our 7-config
-VABL ablation on Overcooked AA at 10M, the attention + constant-aux
-cell is the only one that exhibits late-training instability while
-every configuration reaches the same Best ceiling. The pathology
-reproduces on Cramped Room (Cohen's $d = 5.06$) and on SMAX ($d =
-1.26$) but is absent on MPE simple\_spread, consistent with
+in this design-pattern class with no learned message channel, no
+hidden-state sharing, and a cleanly separable auxiliary pathway. In
+our 7-config VABL ablation on Overcooked AA at 10M, the attention +
+constant-aux cell is the only one that exhibits late-training
+instability while every configuration reaches the same Best ceiling.
+The pathology reproduces on Cramped Room and on SMAX but is absent on
+MPE simple\_spread, consistent with
 Proposition~\ref{prop:variance}'s environment-dependent threshold.
 Three gradient-targeted interventions ($\lambda$-annealing,
 stop-gradient on belief into the auxiliary head, and both combined)
@@ -140,8 +144,9 @@ co-learning non-stationarity.
 
 Our contributions: \textbf{(1)}~a directional
 gradient-interference pathology in the attention + constant-auxiliary
-design pattern under MARL co-learning, observed in published
-AERIAL~\cite{phan2023attention} and isolated in VABL, with
+design pattern used by BEPAL~\cite{huang2025bepal} and
+Dynamic Belief~\cite{zhai2023dynamic}, isolated under controlled
+ablation in VABL, with
 environment-dependence (present on Overcooked and SMAX, absent on MPE);
 \textbf{(2)}~a descriptive stochastic model
 (Proposition~\ref{prop:variance}, bound scaling with
@@ -178,18 +183,27 @@ constant weights are suboptimal.
 collapse under non-stationarity; \cite{chua2024successor} show
 successor-feature losses collapse basis features to cosine-to-1,
 resolved by stop-gradient in the reward loss. In MARL,
-XP-MARL~\cite{xu2024xpmarl} uses auxiliary prioritization as a
-non-stationarity tool and BEPAL~\cite{huang2025bepal} adds prediction
-heads to CTDE belief encoders. None characterize the aux-to-encoder
-\emph{directional} gradient interference we identify.
+XP-MARL~\cite{xu2024xpmarl} uses auxiliary prioritization for
+non-stationarity. BEPAL~\cite{huang2025bepal} and Dynamic
+Belief~\cite{zhai2023dynamic} directly instantiate the design pattern
+we study (attention-based belief encoder + fixed-weight
+teammate-future-prediction aux). Zhai et al.'s Static-Belief ablation
+(their Table~2) independently reports that naively co-trained
+teammate-action prediction drops Traffic Junction success from
+$73.4\%$ (baseline) to $71.9\%$, attributed to teammate
+non-stationarity; their fix is meta-learned dynamic context. Our
+study isolates the same failure mode in a controlled ablation,
+identifies directional gradient interference as the mechanism, and
+characterizes three gradient-pathway interventions.
 
 \paragraph{Attention in MARL.}
-AERIAL~\cite{phan2023attention} uses attention over teammate hidden states;
+AERIAL~\cite{phan2023attention} uses QMIX-based attention over
+teammate hidden states (no auxiliary head);
 MAAC~\cite{iqbal2019actor} places attention in the centralized critic;
 MAT~\cite{wen2022mat} uses an encoder-decoder for centralized policy
-learning. None pair attention-based \emph{decentralized} belief encoding
-with an explicit auxiliary loss, the specific combination our ablation
-targets.
+learning. None pair attention-based \emph{decentralized} belief
+encoding with the specific constant-weight teammate-future-prediction
+auxiliary loss that our study characterizes.
 
 \paragraph{Stop-gradient in SSL and RL.}
 BYOL~\cite{grill2020bootstrap}, SimSiam~\cite{chen2021exploring}, and
@@ -238,18 +252,20 @@ distinct and gradient-mediated.
 % ============================================================================
 
 The design pattern we investigate, attention-based belief encoders
-trained with constant-weight auxiliary prediction losses, appears in
-multiple published methods including AERIAL (attention over teammate
-hidden states, auxiliary recurrence loss)~\cite{phan2023attention}
-and is structurally compatible with the broader family of world-model
-and self-predictive representation architectures that use constant
-auxiliary weights~\cite{hafner2023mastering, schwarzer2021dataefficient,
-jaderberg2016reinforcement}. We construct \textbf{VABL} (Variational
-Attention-based Belief Learning) as a minimal architecture in this
-class, operating on cooperative Dec-POMDPs~\cite{oliehoek2016concise},
-and chosen to be as small and cleanly ablatable as possible so that
-attention, the auxiliary loss, and the gradient flow between them can
-be manipulated independently.
+trained with constant-weight auxiliary prediction losses targeting
+teammate future behavior, has two recent published instances.
+BEPAL~\cite{huang2025bepal} uses a shared LSTM with attention over
+teammate messages and belief-decoder heads predicting teammates'
+future motion and reward with fixed weights; Dynamic
+Belief~\cite{zhai2023dynamic} uses soft attention over episode history
+with a VAE-based head predicting teammates' future actions with fixed
+weights. These sit within the broader family of world-model and
+self-predictive architectures that use constant auxiliary
+weights~\cite{hafner2023mastering,schwarzer2021dataefficient,jaderberg2016reinforcement}.
+We construct \textbf{VABL} as a minimal architecture in this class,
+operating on cooperative Dec-POMDPs~\cite{oliehoek2016concise}, and
+chosen so that attention, the auxiliary loss, and the gradient flow
+between them can be manipulated independently.
 
 \paragraph{Belief update.}
 Each agent $i$ maintains a recurrent latent belief $b_t^i \in
@@ -498,13 +514,18 @@ same $\lambda = 0.05$ constant weight.
 \label{sec:results}
 % ============================================================================
 
-\subsection{Empirical Observation in AERIAL}
+\subsection{A Related Observation in AERIAL}
 \label{sec:aerial_observation}
 
-We first document the phenomenon in the published
-AERIAL~\cite{phan2023attention} architecture on Overcooked Asymmetric
-Advantages at 10M training steps, 5 seeds. Table~\ref{tab:aerial_per_seed}
-reports the per-seed peaks and Final50 values from our reruns.
+Independent of our design-pattern study, our actor-critic port of
+AERIAL~\cite{phan2023attention} (attention over teammate hidden states,
+no aux head) exhibits a consistent Best$\to$Final50 drop of $\sim$15
+points on 4 of 5 seeds on Overcooked AA at 10M
+(Table~\ref{tab:aerial_per_seed}). We do not claim our mechanism
+explains this: AERIAL has no auxiliary prediction head, so the
+aux-to-encoder pathway we isolate in VABL is not present. The origin
+of AERIAL's drop is an open question distinct from the design-pattern
+pathology our main study characterizes.
 
 \begin{table}[h]
 \centering
@@ -539,14 +560,12 @@ instability claims refer to the 4 healthy seeds; both aggregates
 are shown for transparency.}
 \end{table}
 
-The drop signature holds under both aggregates ($15.5 \pm 3.3$ on four
-healthy seeds, $12.6 \pm 6.6$ on all five) and matches Full VABL's drop
-under controlled ablation ($11.6 \pm 7.2$,
-Section~\ref{sec:pathology}), consistent with a shared mechanism.
-A clean AERIAL ablation requires architectural changes that break the
-method, so we turn to VABL, which shares AERIAL's critical features
-(attention-based belief encoder + constant aux loss) while admitting
-clean component ablation.
+Our VABL study instantiates the attention +
+teammate-future-prediction-aux design pattern of
+BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic},
+and admits clean aux-pathway ablation. AERIAL's drop magnitude is
+comparable to Full VABL's ($11.6 \pm 7.2$, \S\ref{sec:pathology}) but
+its origin is distinct and we do not claim to explain it.
 
 \subsection{Isolating the Pathology in VABL}
 \label{sec:pathology}
@@ -759,18 +778,20 @@ and attention type, ruling out a tuning artifact.
 
 \paragraph{Concurrent MARL representational failures.}
 Contemporaneous~\cite{weng2026exploration} identifies a related failure
-in parameter-shared DQN from exploration aggregation (magnitude-driven
-action-value contraction); our pathology is directional aux-vs-policy
-gradient interference within a single agent, suggesting distinct
-shared-representation MARL failure pathways with tailored fixes.
+in parameter-shared DQN (magnitude-driven action-value contraction);
+our pathology is directional aux-vs-policy gradient interference,
+suggesting distinct failure pathways with tailored fixes.
 
-\paragraph{Closing the loop on AERIAL.}
-The AERIAL signature (\S\ref{sec:aerial_observation}: peak untouched,
-10--20-point drop, 4/5 seeds) matches what the directional-interference
-mechanism predicts for this architecture class. AERIAL does not admit
-a clean aux-on/off ablation, so our VABL study fills that gap. We
-conjecture any of our three fix paths would recover AERIAL to the
-no-aux regime; verification requires a non-trivial fork.
+\paragraph{Positioning relative to prior design-pattern instances.}
+BEPAL~\cite{huang2025bepal} uses oracle teammate targets; its
+stationary aux targets support our claim that the pathology is driven
+by co-learning non-stationarity, not aux presence. Dynamic
+Belief~\cite{zhai2023dynamic} uses co-learning targets and
+independently reports the failure mode (static-belief below baseline),
+resolved by meta-learning dynamic context. Our contribution is
+complementary: we isolate the mechanism (directional interference)
+and identify three gradient-pathway interventions that recover the
+no-aux regime on Overcooked without meta-learning machinery.
 
 \paragraph{Practical recommendations.}
 Any of three gradient-pathway interventions suffices in our
@@ -826,15 +847,15 @@ not a control for the design-pattern pathology.
 % ============================================================================
 
 We identify a directional gradient-interference pathology in
-attention-based belief encoders trained with constant-weight auxiliary
-losses, first observed in published AERIAL at 10M and isolated in VABL
-under controlled ablation. On Overcooked, three gradient-targeted
-interventions all sever the auxiliary-to-encoder pathway and converge
-to the no-aux regime, identifying it as the necessary conduit; on
-SMAX, the same interventions reduce cross-seed variance but leave a
-residual mean gap. For practitioners, any of $\lambda \leq 0.01$ or
-annealing, stop-gradient on the belief into the auxiliary head, or
-critic-side auxiliary placement suffices on Overcooked; we additionally
+attention-based belief encoders trained with constant-weight
+teammate-future-prediction aux (as used by
+BEPAL~\cite{huang2025bepal} and Dynamic
+Belief~\cite{zhai2023dynamic}), isolated in VABL under controlled
+ablation. On Overcooked, three gradient-targeted interventions sever
+the aux-to-encoder pathway and converge to the no-aux regime; on SMAX
+they reduce variance but leave a residual mean gap. For practitioners,
+any of $\lambda \leq 0.01$ or annealing, stop-gradient on the belief,
+or critic-side aux placement suffices on Overcooked; we additionally
 find that the widely reported Overcooked coordination collapse is
 largely a training-budget artifact.
 
