@@ -42,8 +42,15 @@ from marl_research.algorithms.jax.vabl_v2 import (
 
 
 def _make_hanabi():
-    from jaxmarl import make
-    return make("hanabi")
+    # Work around jaxmarl's mabrax import path pulling in `brax` (which isn't
+    # installed on every machine). Fake the mabrax submodule before importing.
+    import sys, types
+    if "jaxmarl.environments.mabrax" not in sys.modules:
+        fake = types.ModuleType("jaxmarl.environments.mabrax")
+        fake.Ant = fake.Humanoid = fake.Hopper = fake.Walker2d = fake.HalfCheetah = None
+        sys.modules["jaxmarl.environments.mabrax"] = fake
+    from jaxmarl.environments.hanabi.hanabi import HanabiEnv
+    return HanabiEnv()
 
 
 def train_vabl_hanabi(
