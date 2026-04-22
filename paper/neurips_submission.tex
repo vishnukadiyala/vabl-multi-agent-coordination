@@ -541,62 +541,6 @@ same $\lambda = 0.05$ constant weight.
 \label{sec:results}
 % ============================================================================
 
-\subsection{A Related Observation in AERIAL}
-\label{sec:aerial_observation}
-
-Independent of our design-pattern study, our actor-critic port of
-AERIAL~\cite{phan2023attention} (attention over teammate hidden states,
-no aux head) exhibits a consistent Best$\to$Final50 drop on 4 of 5
-seeds on Overcooked AA at 10M. The 4 converging seeds show a mean drop
-of $15.5$ points (Table~\ref{tab:aerial_per_seed}); seed~1 fails to
-converge and plateaus at $\sim$360. We report both 4-seed and 5-seed
-aggregates for transparency. We do not claim our mechanism explains
-this: AERIAL has no auxiliary prediction head, so the aux-to-encoder
-pathway we isolate in VABL is not present. The origin of AERIAL's drop
-is an open question distinct from the design-pattern pathology our main
-study characterizes.
-
-\begin{table}[h]
-\centering
-\caption{Per-seed AERIAL trajectories on Overcooked Asymmetric
-Advantages (10M steps). Four of five seeds show the characteristic
-pattern: reach a peak of $\sim$482, then drift down $12$--$21$ points
-by end of training. The fifth seed fails to converge at all,
-plateauing at $\sim$360 from roughly $25\%$ of training onward. The
-four healthy seeds average a $15.5 \pm 3.3$-point late-training drop
-(per-seed Best minus Final50).}
-\label{tab:aerial_per_seed}
-\small
-\begin{tabular}{lcccc}
-\toprule
-\textbf{Seed} & \textbf{Peak} & \textbf{Peak position} & \textbf{Final50} & \textbf{Drop} \\
-\midrule
-0 & 476.6 & 59\% & 460.1 & 16.5 \\
-1 & 361.5 & 100\% & 360.3 & 1.2$^\ddagger$ \\
-2 & 481.4 & 79\% & 468.5 & 12.9 \\
-3 & 478.0 & 42\% & 457.4 & 20.6 \\
-4 & 478.2 & 65\% & 466.2 & 12.0 \\
-\midrule
-\textit{4 healthy seeds (mean $\pm$ std)} & \textit{$478.6 \pm 1.7$} & -- & \textit{$463.0 \pm 4.4$} & \textit{$15.5 \pm 3.3$} \\
-\textit{All 5 seeds (mean $\pm$ std)} & \textit{$455.1 \pm 46.9$} & -- & \textit{$442.5 \pm 41.3$} & \textit{$12.6 \pm 6.6$} \\
-\bottomrule
-\end{tabular}
-
-\vspace{2pt}
-{\footnotesize $^\ddagger$Seed 1 never converged (plateaued near
-$360$); the reported ``drop'' reflects no real peak. Our
-instability claims refer to the 4 healthy seeds; both aggregates
-are shown for transparency.}
-\end{table}
-
-Our VABL study instantiates the attention +
-teammate-future-prediction-aux design pattern of
-BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}
-and admits clean aux-pathway ablation. AERIAL's drop is within the
-per-seed envelope observed in Full VABL (per-seed drops $8$--$34$, mean
-$20.6 \pm 10.3$; \S\ref{sec:pathology}), but its origin is distinct and
-we do not claim to explain it.
-
 \subsection{Isolating the Pathology in VABL}
 \label{sec:pathology}
 
@@ -680,6 +624,104 @@ modifies \emph{only} the gradient flow (not the architecture, loss
 function, forward pass, or reward signal) and reduces the cross-seed
 standard deviation from $8.55$ to $2.13$, a $4\times$ reduction.
 
+Multi-seed gradient decomposition (Figure~\ref{fig:gradients}, 5 seeds
+of Full VABL with the policy and aux gradients tracked every 25
+iterations) confirms the directional-not-magnitude reading: the
+late-training (final 50\%) cosine between policy and aux gradients has
+temporal standard deviation $0.179 \pm 0.014$ across seeds with mean
+$\sim 0$, indicating symmetric directional noise rather than a persistent
+conflicting direction, and the magnitude ratio stays bounded below
+$0.25$ in every seed throughout training. Under stop-gradient and fully
+annealed $\lambda$ the aux gradient no longer reaches the encoder
+parameters, so the cosine is zero by construction; we report the Full
+signature here and defer the multi-seed gradient-decomposition figure
+to Figure~\ref{fig:gradients}.
+
+\subsection{Target-Source Distinguishing Test}
+\label{sec:target_source}
+
+The fix paths above are consistent with a directional-interference
+mechanism but are also consistent with a generic
+aux-capacity-consumption alternative in which any aux head attached to
+the shared encoder degrades late-training performance regardless of
+what the aux gradient encodes. To distinguish these hypotheses we hold
+aux capacity, architecture, and the aux-to-encoder gradient pathway
+fixed, and vary only the \emph{source} of the aux target
+(\S\ref{sec:method_distinguishing}).
+
+\begin{table}[t]
+\centering
+\caption{Target-source distinguishing test on Overcooked AA (10M steps, 5 seeds). Aux network and gradient pathway are identical to Full; only the target source varies. Teammate co-learning targets exhibit the pathology; frozen-initial-policy targets partially recover; uniform random targets fully recover the no-aux regime.}
+\label{tab:target_source}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Target source} & \textbf{Structured?} & \textbf{Non-stationary?} & \textbf{Final50} & \textbf{std} \\
+\midrule
+Teammate co-learning (Full)       & yes & yes & $463.21$ & \textbf{8.55} \\
+Frozen initial-policy (stationary) & yes & no  & $470.22$ & $4.52$ \\
+Uniform random                     & no  & no  & $\mathbf{473.58}$ & $\mathbf{1.86}$ \\
+\midrule
+No aux (reference)                 & --- & --- & $473.45$ & $4.04$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:target_source} shows the result. With frozen-policy
+targets the cross-seed std falls from $8.55$ to $4.52$ and the mean
+recovers to within $\sim 3$ points of No Aux. With uniform random
+targets the std drops to $1.86$ (the tightest of any condition in this
+paper) and the mean is statistically indistinguishable from No Aux
+(Cohen's $d = -0.04$, CI crossing zero; Appendix~\ref{app:tables}).
+The capacity-consumption hypothesis predicts all three conditions to
+be pathological because the aux network's parameter count and
+gradient pathway are identical; the data rule this out.
+
+\emph{Interpretation.} Structured co-learning targets carry
+teammate-policy-specific information that drifts across iterations,
+yielding an aux-gradient direction that shifts with teammate updates.
+Frozen targets remove the drift but retain structured prediction
+content; random targets remove both. The pathway through the encoder
+is active in all three, but only the structured-and-drifting
+combination degrades Final50 stability. We therefore identify
+structured, co-learning-non-stationary aux targets as the
+pathway-specific driver rather than the aux pathway itself.
+
+\subsection{Aux-Capacity Scaling Control}
+\label{sec:capacity_scaling}
+
+As a complementary control to the target-source test, we vary the
+aux-MLP hidden dimension across $\{16, 32, 128\}$ and compare against
+the canonical $64$, holding the target (teammate co-learning) and all
+other hyperparameters fixed. A capacity-consumption hypothesis
+predicts monotonic worsening as hidden dim grows; the
+directional-interference story predicts no effect of capacity on
+Final50.
+
+\begin{table}[t]
+\centering
+\caption{Aux-capacity scaling on Overcooked AA (10M steps, 5 seeds). Full VABL with teammate targets, varying only aux-MLP hidden dim. Final50 and std are effectively flat across 8$\times$ capacity range.}
+\label{tab:capacity}
+\small
+\begin{tabular}{lccc}
+\toprule
+\textbf{aux hidden dim} & \textbf{Final50} & \textbf{std} & \textbf{$d$ vs 64} \\
+\midrule
+16      & $462.89$ & $9.15$ & $+0.03$ \\
+32      & $468.74$ & $5.49$ & $-0.71$ \\
+\textbf{64 (canonical)} & $\mathbf{463.21}$ & $\mathbf{9.55}$ & --- \\
+128     & $466.35$ & $8.67$ & $-0.34$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All four Cohen's $d$ bootstrap CIs cross zero; no capacity level is
+distinguishable from $64$. Final50 means lie in
+$[462.89, 468.74]$ with cross-seed stds in $[5.49, 9.55]$. An
+$8\times$ sweep in aux capacity produces no resolvable effect on the
+pathology, reinforcing the target-source test's conclusion: capacity
+consumption alone cannot explain the Final50 instability.
+
 \subsection{Cross-Layout Generalization}
 \label{sec:cramped}
 
@@ -707,41 +749,59 @@ is harmful regardless of whether attention is used, but the effect is
 strongest in Full. The No~Attention comparison CI crosses zero, matching
 the AA pattern where non-attention cells are harder to resolve at $n=5$.
 
-\subsection{The Training-Budget Artifact}
-\label{sec:budget}
+\subsection{Generalization to Hanabi}
+\label{sec:hanabi}
+
+To test whether the pathology reproduces on a canonical turn-based
+coordination benchmark beyond Overcooked, we run the same $2 \times 2$
+ablation on 2-player Hanabi~\cite{bard2020hanabi} from the JaxMARL
+suite with our off-the-shelf hyperparameters (no Hanabi-specific
+tuning). The absolute scores are well below published self-play
+optima because we do not tune Hanabi-specific hyperparameters; our
+claim concerns the \emph{relative} 2$\times$2 pattern.
 
 \begin{table}[t]
 \centering
-\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux = attention only). Communication-based methods (TarMAC, CommNet) dominate in mean reward but with more than $40{\times}$ higher cross-seed variance than VABL. On Cramped Room, all methods saturate at the same ceiling. These baselines establish the training-budget artifact finding, since no method collapses at 10M. They are \emph{not} controls for the directional-interference pathology, which requires the attention + constant-auxiliary-loss design pattern that only VABL embodies among methods evaluated.}
-\label{tab:benchmark}
+\caption{Hanabi 2-player $2 \times 2$ (JaxMARL, 25K episodes, 5 seeds). No Hanabi-specific tuning; absolute scores are low but the relative pattern is unambiguous. Cohen's $d$ for No Aux vs Full = $+2.81$.}
+\label{tab:hanabi}
 \small
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{lccccc}
+\begin{tabular}{lcccc}
 \toprule
- & & \multicolumn{2}{c}{\textbf{Asymm.\ Advantages}} & \multicolumn{2}{c}{\textbf{Cramped Room}} \\
-\cmidrule(lr){3-4} \cmidrule(lr){5-6}
-\textbf{Method} & \textbf{Comm?} & \textbf{Final50} & \textbf{std} & \textbf{Final50} & \textbf{std} \\
+\textbf{Configuration} & \textbf{Attn} & \textbf{Aux} & \textbf{Final50} & \textbf{std} \\
 \midrule
-TarMAC & yes & \textbf{783.72} & 156.10 & 414.73 & 2.78 \\
-CommNet & yes & 773.24 & 148.17 & 416.30 & 0.43 \\
-MAPPO & no & 548.23 & 153.09 & \textbf{417.00} & \textbf{0.00} \\
-VABL (No Aux) & no & 473.45 & \textbf{3.62} & 416.18 & 0.79 \\
-AERIAL & no$^*$ & 442.51 & 41.30 & 416.43 & 0.55 \\
-\midrule
-VABL (Full, pathology) & no & 463.21 & 8.55 & 409.70 & 1.41 \\
+Full (attn + aux)        & \checkmark & \checkmark & $0.14$ & $0.26$ \\
+No Attention (mean + aux) & --         & \checkmark & $0.26$ & $0.30$ \\
+No Aux (attn only)       & \checkmark & --         & $\mathbf{2.81}$ & $1.32$ \\
+Neither (mean only)      & --         & --         & $1.84$ & $1.62$ \\
 \bottomrule
 \end{tabular}
-
-\vspace{2pt}
-{\footnotesize $^*$AERIAL shares teammate hidden states but uses no learned message channel.}
 \end{table}
 
-Table~\ref{tab:benchmark} shows the 6-method benchmark on both layouts.
-Communication methods (TarMAC, CommNet) lead on AA but with cross-seed
-std $> 148$, more than $40\times$ VABL's; single-seed comparisons across
-communication and communication-free methods are uninformative at this
-scale. VABL (including the pathological Full at $\sigma = 8.55$) has
-the tightest cross-seed variance of any method by an order of magnitude.
+Table~\ref{tab:hanabi} shows the result. The two aux-ON cells
+($0.14$ and $0.26$) are an order of magnitude lower than the two
+aux-OFF cells ($2.81$ and $1.84$); Cohen's $d$ for No Aux vs Full is
+$+2.81$, larger than the $+1.40$ we observe on Overcooked AA. The
+qualitative $2 \times 2$ pattern differs from AA in one respect: on
+AA the pathology occupies only the attention + aux-ON cell, whereas
+on Hanabi both aux-ON cells are pathological. We read this as a
+sharpening of the claim: the pathway-specific driver is an aux
+gradient carrying structured, co-learning-non-stationary teammate-
+prediction content into the shared actor encoder; learned attention
+is one surface that amplifies this coupling on AA, but on
+information-rich turn-based environments the aux gradient disrupts
+policy learning even without attention.
+
+\subsection{Training-Budget Artifact (Secondary Finding)}
+\label{sec:budget}
+
+A 6-method benchmark on both Overcooked layouts at 10M steps
+(Table~\ref{tab:benchmark} in Appendix~\ref{app:tables}) shows no
+method collapses at 10M, unlike earlier reports at lower budgets.
+Coordination collapse on AA drops from $\sim$46\% at 500K to $<$3\%
+at 10M; MAPPO, TarMAC, and CommNet converge stably. The residual
+instability we identify is distinct from and much smaller than the
+widely reported ``collapse'', which is largely a training-budget
+artifact.
 
 \subsection{Architecture Generalization}
 \label{sec:arch_sweep}
@@ -973,6 +1033,69 @@ vanishes regardless of the encoder type.
 
 \section{Additional Tables and Per-Seed Data}
 \label{app:tables}
+
+\paragraph{Related observation in AERIAL.}
+Independent of our design-pattern study, our actor-critic port of
+AERIAL~\cite{phan2023attention} exhibits a consistent
+Best$\to$Final50 drop on 4 of 5 seeds on Overcooked AA at 10M. The
+four converging seeds show a mean drop of $15.5 \pm 3.3$ points
+(per-seed Best minus Final50). Seed 1 fails to converge entirely,
+plateauing at $\sim$360. AERIAL has no auxiliary prediction head, so
+the aux-to-encoder pathway we isolate in VABL is not present; we do
+not claim our mechanism explains AERIAL's drop. Per-seed trajectories
+in Table~\ref{tab:aerial_per_seed}.
+
+\begin{table}[h]
+\centering
+\caption{Per-seed AERIAL trajectories on Overcooked AA (10M steps).}
+\label{tab:aerial_per_seed}
+\small
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Seed} & \textbf{Peak} & \textbf{Peak position} & \textbf{Final50} & \textbf{Drop} \\
+\midrule
+0 & 476.6 & 59\% & 460.1 & 16.5 \\
+1 & 361.5 & 100\% & 360.3 & 1.2$^\ddagger$ \\
+2 & 481.4 & 79\% & 468.5 & 12.9 \\
+3 & 478.0 & 42\% & 457.4 & 20.6 \\
+4 & 478.2 & 65\% & 466.2 & 12.0 \\
+\midrule
+\textit{4 healthy seeds} & \textit{$478.6 \pm 1.7$} & -- & \textit{$463.0 \pm 4.4$} & \textit{$15.5 \pm 3.3$} \\
+\textit{All 5 seeds} & \textit{$455.1 \pm 46.9$} & -- & \textit{$442.5 \pm 41.3$} & \textit{$12.6 \pm 6.6$} \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize $^\ddagger$Seed 1 plateaued at $\sim$360 without a real peak. Our instability claims refer to the 4 healthy seeds.}
+\end{table}
+
+\paragraph{6-method benchmark (Overcooked AA and Cramped Room).}
+
+\begin{table}[h]
+\centering
+\caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux). All methods on Cramped Room saturate at the ceiling. Communication methods lead on AA in mean but with cross-seed std $>148$, more than $40\times$ VABL's. These baselines support the training-budget-artifact finding; they are not controls for the pathway-specific pathology.}
+\label{tab:benchmark}
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lccccc}
+\toprule
+ & & \multicolumn{2}{c}{\textbf{Asymm.\ Advantages}} & \multicolumn{2}{c}{\textbf{Cramped Room}} \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6}
+\textbf{Method} & \textbf{Comm?} & \textbf{Final50} & \textbf{std} & \textbf{Final50} & \textbf{std} \\
+\midrule
+TarMAC & yes & \textbf{783.72} & 156.10 & 414.73 & 2.78 \\
+CommNet & yes & 773.24 & 148.17 & 416.30 & 0.43 \\
+MAPPO & no & 548.23 & 153.09 & \textbf{417.00} & \textbf{0.00} \\
+VABL (No Aux) & no & 473.45 & \textbf{3.62} & 416.18 & 0.79 \\
+AERIAL & no$^*$ & 442.51 & 41.30 & 416.43 & 0.55 \\
+\midrule
+VABL (Full, pathology) & no & 463.21 & 8.55 & 409.70 & 1.41 \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize $^*$AERIAL shares teammate hidden states but uses no learned message channel.}
+\end{table}
 
 \paragraph{6-method benchmark figure (Overcooked AA).}
 
@@ -1260,6 +1383,52 @@ auxiliary gradient flows through the critic rather than the actor's belief
 encoder, so it corrupts value estimates (which are recomputed each epoch)
 rather than the policy representation (which accumulates damage through
 recurrence).
+
+
+\section{Exploratory: VAE Belief Encoder (Dynamic-Belief-style)}
+\label{app:vae_belief}
+
+As an exploratory probe of whether the pathology reproduces when
+VABL's recurrent belief encoder is replaced by a
+reparameterization-based VAE belief (matching Dynamic
+Belief's~\cite{zhai2023dynamic} architectural signature with its KL
+weight $\beta = 0.005$), we run the $2 \times 2$ ablation on
+Overcooked AA at 10M steps, 5 seeds each.
+
+\begin{table}[h]
+\centering
+\caption{VAE-belief $2 \times 2$ ablation on Overcooked AA (5 seeds; Dynamic-Belief-style reparameterization with $\beta=0.005$). Cross-seed std is one to two orders of magnitude larger than the GRU-belief equivalents (Table~\ref{tab:ablation}); the test is underpowered to resolve the pathology signal.}
+\label{tab:vae_belief}
+\small
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Final50} & \textbf{std} \\
+\midrule
+Full (attn + aux)        & $510.85$ & $96.29$ \\
+No Attention (mean + aux) & $347.43$ & $67.30$ \\
+No Aux (attn only)       & $455.98$ & $107.06$ \\
+Neither (mean only)      & $376.17$ & $43.37$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Under the VAE belief, cross-seed Final50 standard deviations are
+$43$--$107$, one to two orders of magnitude larger than the
+$1.8$--$8.6$ we observe with the GRU belief encoder
+(Table~\ref{tab:ablation}). Our $\sim 10$-point pathology signal
+cannot be resolved against this intrinsic variance at $n=5$: the
+Cohen's $d$ for Full vs No Aux is $-0.54$ with CI crossing zero.
+
+We report this as an exploratory probe and not as a confirmation or
+refutation. Three interpretations are consistent with the data.
+(a)~The VAE reparameterization adds training stochasticity that
+dominates the $n=5$ pathology signal; a larger $n$ or longer training
+would be required to resolve. (b)~The VAE's implicit regularization
+partially mitigates the directional-interference pathology, leaving a
+residual gap below the resolution of this test. (c)~The VAE belief is
+a different enough architecture that the pathology has different
+dynamics here; a VAE-specific study would be needed to characterize
+them. The main paper does not rely on this experiment.
 
 
 \section{Hyperparameters}
