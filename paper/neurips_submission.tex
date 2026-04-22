@@ -323,104 +323,114 @@ this pathway as the source of the late-training instability.
 
 
 % ============================================================================
-\section{Descriptive Model: Directional Interference}
+\section{Theory: From Teammate Drift to Directional Interference}
 \label{sec:theory}
 % ============================================================================
 
-We develop a minimal analytical model that characterizes the empirical
-findings. The key insight is that the pathology arises not from the
-\emph{magnitude} of the auxiliary gradient but from its \emph{directional
-variance} under co-learning non-stationarity.
+We close the loop from co-learning to parameter variance in four
+steps: (i) define directional interference and distinguish it from
+magnitude interference; (ii) derive the aux-gradient noise covariance
+from teammate-policy drift; (iii) bound late-training parameter
+variance in terms of that covariance; (iv) state a threshold
+condition for instability onset. The model is descriptive (not a
+first-principles prediction of absolute performance), but it connects
+co-learning dynamics to observed instability without treating noise
+as exogenous.
 
-\paragraph{Gradient decomposition near convergence.}
-Near a local optimum $\theta^*$, the policy loss is approximately quadratic
-with Hessian $H$, giving policy gradient $\nabla_\theta L_{\mathrm{policy}}
-= H(\theta - \theta^*)$, which shrinks as $\theta \to \theta^*$. The
-auxiliary gradient $g_{\mathrm{aux}}(t) = \lambda \nabla_\theta
-L_{\mathrm{aux}}(\theta; \pi_j^{(t)})$ depends on teammate $j$'s current
-policy $\pi_j^{(t)}$, which is non-stationary under co-learning.
-
-\paragraph{Noise decomposition.}
-We decompose $g_{\mathrm{aux}}(t) = \bar{g}_{\mathrm{aux}} + \varepsilon(t)$
-into a mean component and zero-mean noise with covariance
-$\Sigma_\varepsilon$. The noise $\varepsilon(t)$ arises specifically
-from co-learning
-non-stationarity~\cite{hernandezleal2017survey, nekoei2023dealing}: if
-teammate $j$'s policy were frozen, $\varepsilon \to 0$.
-
-\paragraph{Stochastic dynamics.}
-Centering around the effective fixed point $\theta^*_{\mathrm{eff}} =
-\theta^* - H^{-1}\bar{g}_{\mathrm{aux}}$, the displacement $\delta(t) =
-\theta(t) - \theta^*_{\mathrm{eff}}$ evolves as:
+\paragraph{Step 1: defining directional interference.} Let
+$g_\pi(t) = \nabla_\theta L_{\mathrm{PPO}}(\theta_t)$ and
+$g_{\mathrm{aux}}(t) = \lambda \nabla_\theta L_{\mathrm{aux}}(\theta_t;
+\pi_j^{(t)})$ be the two gradient signals the actor receives at
+iteration $t$. Prior gradient-conflict work
+(PCGrad~\cite{yu2020gradient}, GradNorm~\cite{chen2018gradnorm})
+treats conflict as a \emph{magnitude} imbalance: persistent
+$\mathbb{E}[g_\pi^\top g_{\mathrm{aux}}] < 0$ or
+$\|g_{\mathrm{aux}}\| \gg \|g_\pi\|$. We define \emph{directional
+interference} as temporal variance in gradient alignment:
 \begin{equation}
-    \delta(t{+}1) = (I - \alpha H)\,\delta(t) - \alpha\,\varepsilon(t),
+    I_{\mathrm{dir}}
+    = \mathrm{Var}_t\!\left[\tfrac{g_\pi(t)^\top g_{\mathrm{aux}}(t)}{\|g_\pi(t)\|\|g_{\mathrm{aux}}(t)\|}\right],
+    \quad
+    I_{\mathrm{mag}}
+    = \left(\mathbb{E}_t\!\left[\tfrac{g_\pi(t)^\top g_{\mathrm{aux}}(t)}{\|g_\pi(t)\|\|g_{\mathrm{aux}}(t)\|}\right]\right)^2 .
+    \label{eq:idir}
+\end{equation}
+High $I_{\mathrm{mag}}$ signals a persistent conflicting direction
+(what PCGrad corrects). High $I_{\mathrm{dir}}$ with $I_{\mathrm{mag}}
+\approx 0$ signals alignment that \emph{oscillates}: neither helpful
+nor persistently harmful but corrosive to convergence.
+Figure~\ref{fig:gradients} measures Full VABL's late-training signature
+($\mathbb{E}[\cos] \approx 0$, $\mathrm{std}(\cos) = 0.185$), i.e.\
+$I_{\mathrm{dir}} \gg I_{\mathrm{mag}}$.
+
+\paragraph{Step 2: deriving $\Sigma_\varepsilon$ from teammate drift.}
+Decompose $g_{\mathrm{aux}}(t) = \bar g_{\mathrm{aux}} + \varepsilon(t)$
+into mean and zero-mean fluctuation. Because the aux loss depends on
+teammate policy $\pi_j^{(t)}$, a first-order expansion around the
+time-averaged policy $\bar\pi_j$ gives
+\begin{equation}
+    \varepsilon(t) \approx J_\pi \,(\pi_j^{(t)} - \bar\pi_j),
+    \qquad
+    \Sigma_\varepsilon \approx J_\pi \,\Sigma_\pi\, J_\pi^\top,
+    \qquad
+    \Sigma_\pi = \mathrm{Cov}_t[\pi_j^{(t)}],
+    \label{eq:drift_to_noise}
+\end{equation}
+where $J_\pi = \partial g_{\mathrm{aux}}/\partial \pi_j$ evaluated at
+$\bar\pi_j$. The gradient noise covariance factors through the
+teammate-policy drift covariance. Two limits:
+frozen teammate ($\Sigma_\pi = 0$) gives $\Sigma_\varepsilon \to 0$;
+a target constructed not to depend on teammate policy ($J_\pi = 0$,
+e.g.\ random targets) also gives $\Sigma_\varepsilon \to 0$. The
+target-source distinguishing test (\S\ref{sec:mechanism}) realizes
+both limits empirically.
+
+\paragraph{Step 3: noise-driven parameter variance.}
+Near a local optimum $\theta^*$ the policy loss is approximately
+quadratic with Hessian $H \succ 0$, giving $\nabla_\theta
+L_{\mathrm{PPO}} = H(\theta - \theta^*)$ which shrinks as $\theta \to
+\theta^*$. Centering around $\theta^*_{\mathrm{eff}} = \theta^* -
+H^{-1} \bar g_{\mathrm{aux}}$, the displacement $\delta(t) = \theta(t)
+- \theta^*_{\mathrm{eff}}$ evolves as
+\begin{equation}
+    \delta(t{+}1) = (I - \alpha H)\,\delta(t) - \alpha\,\varepsilon(t).
     \label{eq:dynamics}
 \end{equation}
-a linear stochastic system driven by the directional noise of the auxiliary
-gradient.
 
-Intuitively, late-training parameter variance grows with the
-auxiliary-gradient directional noise $\Sigma_\varepsilon$ (numerator)
-and shrinks with the minimum policy-loss curvature $\lambda_{\min}(H)$
-(denominator); a flatter landscape amplifies the noise. The
-proposition is \emph{descriptive}, relating two measurable quantities
-under a simplifying assumption.
-
-\begin{proposition}[Steady-state variance; descriptive linear model]
+\begin{proposition}[Drift-to-variance]
 \label{prop:variance}
-Consider the linearized dynamics of Eq.~\eqref{eq:dynamics} with
-noise $\varepsilon(t)$ (Cov $= \Sigma_\varepsilon$, treated as
-i.i.d.\ for tractability) and spectral radius $\rho(I - \alpha H) < 1$.
-Given these primitives, the steady-state parameter variance satisfies:
+Under Eq.~\eqref{eq:dynamics} with $\varepsilon(t)$ treated as i.i.d.\
+with covariance given by Eq.~\eqref{eq:drift_to_noise} and spectral
+radius $\rho(I - \alpha H) < 1$, the steady-state displacement
+variance satisfies
 \begin{equation}
     \mathbb{E}[\|\delta\|^2]
     \;\propto\;
-    \frac{\alpha^2 \,\mathrm{tr}(\Sigma_\varepsilon)}
+    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
          {\lambda_{\min}(H)}.
     \label{eq:variance_bound}
 \end{equation}
 \end{proposition}
 
-\textit{Assumptions and scope.} This is a descriptive model, not a
-first-principles prediction. We treat $\Sigma_\varepsilon$ as empirical
-(Figure~\ref{fig:gradients}) rather than derived; quadratic loss and
-i.i.d.\ noise simplify real PPO. A synthetic experiment with prescribed
-$H$ and $\Sigma_\varepsilon$ recovers the bound
-(Appendix~\ref{app:synthetic}). The qualitative implications explain
-why the fix paths work: each severs the aux-to-encoder gradient pathway,
-driving $\Sigma_\varepsilon \to 0$ in the encoder subspace.
-
-\begin{proof}[Proof sketch]
-The steady-state covariance satisfies the discrete Lyapunov equation
-$\Sigma_\delta = A \Sigma_\delta A^T + \alpha^2 \Sigma_\varepsilon$
-with $A = I - \alpha H$. Diagonalizing yields
-$\mathrm{tr}(\Sigma_\delta) = \alpha^2 \sum_i
-\sigma_{\varepsilon,i}^2 / (2\alpha h_i - \alpha^2 h_i^2)$, dominated by
-$\lambda_{\min}(H)$. Full derivation in Appendix~\ref{app:proof}.
-\end{proof}
-
-\paragraph{Qualitative consistencies with experiment.}
-Eq.~\eqref{eq:variance_bound} makes two qualitative predictions that
-the experiments support (post-hoc; not \emph{a priori}).
-(i)~\textbf{Driving $\Sigma_\varepsilon \to 0$ in the encoder subspace
-should recover stability.} Our three fix paths do exactly that:
-annealing, stop-gradient on the belief, and critic-side placement all
-cut or decay the aux-to-encoder gradient pathway, and all three
-Final50 means lie within a 2-point spread of the no-aux regime
-(\S\ref{sec:fixes}). (ii)~\textbf{Fixed or stationary supervised
-targets should reduce $\Sigma_\varepsilon$ even with the aux pathway
-active.} The target-source distinguishing test confirms this: random
-and frozen-policy targets leave the aux network and pathway identical
-to Full but reduce target drift, and they recover the no-aux regime
-(\S\ref{sec:mechanism}). The same logic predicts CIFAR-100's
-near-null effect ($<0.5$ points, Appendix~\ref{app:vision}), since
-supervised labels are perfectly stationary. Figure~\ref{fig:gradients}
-plots the empirical decomposition on Full VABL: cosine between the PPO
-and aux gradients oscillates symmetrically across both signs
-(pooled-across-seeds mean $\approx 0$, $\mathrm{std}(\cos) = 0.185$ in
-late training, 5 seeds), while the aux-to-policy magnitude ratio mean
-stays below $0.25$ throughout training; a directional-not-magnitude
-signature.
+\paragraph{Step 4: threshold and testable predictions.}
+Displacement competes with policy progress, so instability onset (in
+the sense of elevated cross-seed Final50 variance) corresponds to
+$\alpha^2 \mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)/\lambda_{\min}(H)
+\gtrsim C(\alpha, \eta)$, where $\eta$ is the per-iteration policy-
+gradient norm and $C$ the policy-signal scale. This yields three
+testable predictions. \textbf{(a) Stationarity null}: $\Sigma_\pi
+\approx 0$ (supervised labels, symmetric slow drift) $\Rightarrow$
+no pathology. \textbf{(b) Pathway null}: interventions that drive
+$J_\pi \to 0$ in the encoder subspace (stop-gradient, critic-side
+aux, annealed $\lambda$) $\Rightarrow$ recovery. \textbf{(c) Target
+ordering}: ranking target sources by $\Sigma_\pi$ (random $= 0$,
+frozen $= 0$, co-learning $> 0$) predicts ranking in pathology
+severity. All three are tested in
+\S\ref{sec:mechanism}--\ref{sec:cross_env}; the derivation (scope:
+quadratic loss, linearized dynamics, i.i.d.\ noise, first-order
+expansion) in Appendix~\ref{app:proof} uses the Lyapunov equation
+$\Sigma_\delta = A \Sigma_\delta A^\top + \alpha^2 \Sigma_\varepsilon$
+with $A = I - \alpha H$ and substitutes Eq.~\eqref{eq:drift_to_noise}.
 
 \begin{figure}[t]
 \centering
