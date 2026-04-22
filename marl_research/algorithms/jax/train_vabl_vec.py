@@ -104,10 +104,14 @@ def train_vabl_vec(
     agent_net = VABLAgent(config)
     critic_net = Critic(config.critic_hidden_dim)
 
-    rng, rng_a, rng_c = jax.random.split(rng, 3)
+    rng, rng_a, rng_c, rng_v = jax.random.split(rng, 4)
     # v2 agent signature: (obs, prev_belief, teammate_actions_oh, teammate_indices, vis_mask)
     dummy_t_idx = jnp.arange(1, n_agents, dtype=jnp.int32)  # teammate indices for agent 0
-    agent_params = agent_net.init(rng_a, jnp.zeros(obs_dim), jnp.zeros(config.hidden_dim),
+    # When use_vae_belief=True the agent calls self.make_rng('vae') inside the
+    # forward; Flax needs a 'vae' rng stream at init time even if the VAE
+    # branch is inactive, for parameter-shape determination.
+    init_rngs = {"params": rng_a, "vae": rng_v}
+    agent_params = agent_net.init(init_rngs, jnp.zeros(obs_dim), jnp.zeros(config.hidden_dim),
                                    jnp.zeros((n_teammates, n_actions)), dummy_t_idx, jnp.ones(n_teammates))
     critic_params = critic_net.init(rng_c, jnp.zeros(obs_dim * n_agents))
 
@@ -138,12 +142,14 @@ def train_vabl_vec(
             rng_env = jax.random.fold_in(rng, env_idx)
             def per_agent(i):
                 rng_i = jax.random.fold_in(rng_env, i)
+                rng_i_act, rng_i_vae = jax.random.split(rng_i)
                 t_idx = teammate_idx[i]
                 t_oh = jax.nn.one_hot(env_prev_acts[t_idx], n_actions)
                 # v2 signature: (obs, prev_belief, teammate_actions_oh, teammate_indices, vis_mask)
-                logits, new_b, _ = agent_net.apply(
-                    params, env_obs[i], env_beliefs[i], t_oh, t_idx, jnp.ones(n_teammates))
-                action = jax.random.categorical(rng_i, logits)
+                logits, new_b, _, _ = agent_net.apply(
+                    params, env_obs[i], env_beliefs[i], t_oh, t_idx, jnp.ones(n_teammates),
+                    rngs={"vae": rng_i_vae})
+                action = jax.random.categorical(rng_i_act, logits)
                 lp = jax.nn.log_softmax(logits)[action]
                 return action, new_b, lp
             return jax.vmap(per_agent)(jnp.arange(n_agents))
@@ -177,29 +183,37 @@ def train_vabl_vec(
         return advantages, returns
 
     @jax.jit
-    def compute_logits_and_aux(params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx):
-        """Returns (logits [B*n_agents, n_actions], aux_logits [B*n_agents, n_teammates, n_actions])."""
-        def forward_one(obs_i, belief_i, t_oh_i, t_idx_i):
+    def compute_logits_and_aux(params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng):
+        """Returns (logits [B*n_agents, n_actions], aux_logits [B*n_agents, n_teammates, n_actions],
+        kl_total scalar — sum of per-sample KL terms; zero when use_vae_belief=False).
+        vae_rng is the per-batch VAE rng; split per-sample via fold_in for determinism.
+        """
+        def forward_one(idx, obs_i, belief_i, t_oh_i, t_idx_i):
             # v2 signature: (obs, prev_belief, teammate_actions_oh, teammate_indices, vis_mask)
-            logits, _, aux = agent_net.apply(
-                params, obs_i, belief_i, t_oh_i, t_idx_i, jnp.ones(n_teammates))
-            return logits, aux
-        return jax.vmap(forward_one)(flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            rng_i = jax.random.fold_in(vae_rng, idx)
+            logits, _, aux, kl = agent_net.apply(
+                params, obs_i, belief_i, t_oh_i, t_idx_i, jnp.ones(n_teammates),
+                rngs={"vae": rng_i})
+            return logits, aux, kl
+        idx = jnp.arange(flat_obs.shape[0])
+        logits, aux, kls = jax.vmap(forward_one)(idx, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+        return logits, aux, kls.sum()
 
     @jax.jit
     def compute_separate_gradients(
         params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
-        flat_actions, flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff,
+        flat_actions, flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff, vae_rng,
     ):
         """Compute policy-only and aux-only gradients separately for the diagnostic.
 
         Matches the terms inside `actor_update.loss_fn` but splits the PPO+entropy
         loss from the aux loss so we can measure norms and cosine between the two
-        gradient directions in the full param tree.
+        gradient directions in the full param tree. VAE KL is not included in
+        either split (it's added at the combined-loss level by actor_update).
         """
         def policy_only_loss(p):
-            flat_logits, _ = compute_logits_and_aux(
-                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            flat_logits, _, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
             B = flat_actions.shape[0]
             logits = flat_logits.reshape(B, n_agents, n_actions)
             lp = jax.nn.log_softmax(logits)
@@ -214,8 +228,8 @@ def train_vabl_vec(
             return p_loss + config.entropy_coef * e_loss
 
         def aux_only_loss(p):
-            _, flat_aux = compute_logits_and_aux(
-                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            _, flat_aux, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
             aux_lp = jax.nn.log_softmax(flat_aux, axis=-1)
             aux_taken = jnp.take_along_axis(
                 aux_lp, flat_next_t_actions[..., None], axis=-1
@@ -237,25 +251,31 @@ def train_vabl_vec(
         return norm_p, norm_a, cos
 
     @jax.jit
-    def frozen_policy_argmax_actions(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx):
+    def frozen_policy_argmax_actions(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng):
         """Run a FROZEN policy snapshot on rollout obs/beliefs and return deterministic
         argmax actions for each agent. Used to compute stationary aux targets that do
         not drift with co-learning teammate policies.
 
-        Returns flat actions of shape [B*n_agents] (int32).
+        Returns flat actions of shape [B*n_agents] (int32). The vae_rng argument is
+        threaded for signature compatibility; the argmax makes the choice independent
+        of the VAE noise (argmax(mu + sigma*eps) is not exactly argmax(mu), but for
+        a distinguishing experiment we accept the stochasticity).
         """
-        logits, _ = compute_logits_and_aux(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+        logits, _, _ = compute_logits_and_aux(
+            frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
         return jnp.argmax(logits, axis=-1).astype(jnp.int32)
 
     # Static scalar constants the jit should bake in from config
     _use_aux_loss = bool(config.use_aux_loss)
+    _use_vae_belief = bool(config.use_vae_belief)
+    _vae_kl_weight = float(config.vae_kl_weight)
 
     @jax.jit
     def actor_update(agent_state, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, flat_actions,
-                     flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff):
+                     flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff, vae_rng):
         def loss_fn(params):
-            flat_logits, flat_aux = compute_logits_and_aux(
-                params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            flat_logits, flat_aux, kl_total = compute_logits_and_aux(
+                params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
             # flat_logits: [N*H*n_agents, n_actions]
             # flat_aux: [N*H*n_agents, n_teammates, n_actions]
             B = flat_actions.shape[0]  # N*H
@@ -279,7 +299,12 @@ def train_vabl_vec(
             aux_loss = -aux_taken.mean()
 
             aux_term = aux_lambda_eff * aux_loss if _use_aux_loss else jnp.zeros_like(aux_loss)
-            return p_loss + config.entropy_coef * e_loss + aux_term
+            # VAE KL term (per-sample average so magnitude is independent of batch).
+            if _use_vae_belief:
+                kl_term = _vae_kl_weight * (kl_total / B)
+            else:
+                kl_term = jnp.zeros_like(aux_loss)
+            return p_loss + config.entropy_coef * e_loss + aux_term + kl_term
         loss, grads = jax.value_and_grad(loss_fn)(agent_state.params)
         return agent_state.apply_gradients(grads=grads), loss
 
@@ -431,8 +456,10 @@ def train_vabl_vec(
             # step t+1. This keeps aux capacity, architecture, and the
             # aux-to-encoder gradient pathway identical to Full, but decouples
             # the *targets* from co-learning teammate policies.
+            rng, rng_frozen_vae = jax.random.split(rng)
             frozen_actions_flat = frozen_policy_argmax_actions(
-                frozen_agent_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx
+                frozen_agent_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+                rng_frozen_vae,
             )  # [N*H*n_agents]
             frozen_acts_NH_agents = frozen_actions_flat.reshape(n_envs, horizon, n_agents)
             next_frozen_NH = jnp.concatenate(
@@ -467,10 +494,11 @@ def train_vabl_vec(
         # Gradient decomposition diagnostic (before the PPO epochs so the
         # snapshot is taken at the same params we're about to update from).
         if log_gradient_decomp and (iteration % grad_log_interval == 0):
+            rng, rng_gd_vae = jax.random.split(rng)
             np_, na_, co_ = compute_separate_gradients(
                 agent_state.params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
                 flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
-                jnp.asarray(aux_lambda_eff),
+                jnp.asarray(aux_lambda_eff), rng_gd_vae,
             )
             grad_log.append({
                 "iteration": int(iteration),
@@ -482,10 +510,11 @@ def train_vabl_vec(
 
         # PPO epochs
         for _ in range(config.ppo_epochs):
+            rng, rng_au_vae = jax.random.split(rng)
             agent_state, a_loss = actor_update(
                 agent_state, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
                 flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
-                jnp.asarray(aux_lambda_eff))
+                jnp.asarray(aux_lambda_eff), rng_au_vae)
             critic_state, c_loss = critic_update(critic_state, flat_states, returns_flat)
 
         if (iteration + 1) % log_interval == 0 or iteration == 0:
@@ -512,6 +541,8 @@ def train_vabl_vec(
         "aux_frozen_target_policy": bool(aux_frozen_target_policy),
         "aux_noise_targets": bool(aux_noise_targets),
         "log_gradient_decomp": bool(log_gradient_decomp),
+        "use_vae_belief": bool(config.use_vae_belief),
+        "vae_kl_weight": float(config.vae_kl_weight),
         "n_agents": int(config.n_agents),
         "n_actions": int(config.n_actions),
         "obs_dim": int(config.obs_dim),
@@ -579,6 +610,11 @@ if __name__ == "__main__":
     parser.add_argument("--aux-hidden-dim", type=int, default=None,
                         help="Override aux-MLP hidden dim (default 64). Used to scale aux capacity "
                              "independently of target source, e.g. --aux-hidden-dim 16.")
+    parser.add_argument("--use-vae-belief", action="store_true",
+                        help="Use Dynamic-Belief-style VAE belief encoder (GRU -> mu/log_sigma2 -> "
+                             "reparameterized sample) with KL-to-N(0, I) regularizer.")
+    parser.add_argument("--vae-kl-weight", type=float, default=0.005,
+                        help="KL weight for VAE belief. Default 0.005 matches Zhai et al.")
     parser.add_argument("--log-gradient-decomp", action="store_true",
                         help="Log per-iteration policy/aux gradient norms + cosine (diagnostic).")
     parser.add_argument("--grad-log-interval", type=int, default=25,
@@ -596,6 +632,9 @@ if __name__ == "__main__":
     )
     if args.aux_hidden_dim is not None:
         cfg_kwargs["aux_hidden_dim"] = int(args.aux_hidden_dim)
+    if args.use_vae_belief:
+        cfg_kwargs["use_vae_belief"] = True
+        cfg_kwargs["vae_kl_weight"] = float(args.vae_kl_weight)
     base_config = VABLConfig()._replace(**cfg_kwargs)
 
     train_vabl_vec(

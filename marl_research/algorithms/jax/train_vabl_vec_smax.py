@@ -78,9 +78,10 @@ def train_vabl_smax(
     agent_net = VABLAgent(config)
     critic_net = Critic(config.critic_hidden_dim)
 
-    rng, rng_a, rng_c = jax.random.split(rng, 3)
+    rng, rng_a, rng_c, rng_v = jax.random.split(rng, 4)
     dummy_t_idx = jnp.arange(1, n_agents, dtype=jnp.int32)
-    agent_params = agent_net.init(rng_a, jnp.zeros(obs_dim), jnp.zeros(config.hidden_dim),
+    init_rngs = {"params": rng_a, "vae": rng_v}
+    agent_params = agent_net.init(init_rngs, jnp.zeros(obs_dim), jnp.zeros(config.hidden_dim),
                                    jnp.zeros((n_teammates, n_actions)), dummy_t_idx, jnp.ones(n_teammates))
     critic_params = critic_net.init(rng_c, jnp.zeros(obs_dim * n_agents))
 
@@ -102,11 +103,13 @@ def train_vabl_smax(
             rng_env = jax.random.fold_in(rng, env_idx)
             def per_agent(i):
                 rng_i = jax.random.fold_in(rng_env, i)
+                rng_i_act, rng_i_vae = jax.random.split(rng_i)
                 t_idx = teammate_idx[i]
                 t_oh = jax.nn.one_hot(env_prev_acts[t_idx], n_actions)
-                logits, new_b, _ = agent_net.apply(
-                    params, env_obs[i], env_beliefs[i], t_oh, t_idx, jnp.ones(n_teammates))
-                action = jax.random.categorical(rng_i, logits)
+                logits, new_b, _, _ = agent_net.apply(
+                    params, env_obs[i], env_beliefs[i], t_oh, t_idx, jnp.ones(n_teammates),
+                    rngs={"vae": rng_i_vae})
+                action = jax.random.categorical(rng_i_act, logits)
                 lp = jax.nn.log_softmax(logits)[action]
                 return action, new_b, lp
             return jax.vmap(per_agent)(jnp.arange(n_agents))
@@ -135,21 +138,27 @@ def train_vabl_smax(
         return advantages, returns
 
     @jax.jit
-    def compute_logits_and_aux(params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx):
-        def forward_one(obs_i, belief_i, t_oh_i, t_idx_i):
-            logits, _, aux = agent_net.apply(
-                params, obs_i, belief_i, t_oh_i, t_idx_i, jnp.ones(n_teammates))
-            return logits, aux
-        return jax.vmap(forward_one)(flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+    def compute_logits_and_aux(params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng):
+        def forward_one(idx, obs_i, belief_i, t_oh_i, t_idx_i):
+            rng_i = jax.random.fold_in(vae_rng, idx)
+            logits, _, aux, kl = agent_net.apply(
+                params, obs_i, belief_i, t_oh_i, t_idx_i, jnp.ones(n_teammates),
+                rngs={"vae": rng_i})
+            return logits, aux, kl
+        idx = jnp.arange(flat_obs.shape[0])
+        logits, aux, kls = jax.vmap(forward_one)(idx, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+        return logits, aux, kls.sum()
 
     _use_aux_loss = bool(config.use_aux_loss)
+    _use_vae_belief = bool(config.use_vae_belief)
+    _vae_kl_weight = float(config.vae_kl_weight)
 
     @jax.jit
     def actor_update(agent_state, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, flat_actions,
-                     flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff):
+                     flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff, vae_rng):
         def loss_fn(params):
-            flat_logits, flat_aux = compute_logits_and_aux(
-                params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            flat_logits, flat_aux, kl_total = compute_logits_and_aux(
+                params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
             B = flat_actions.shape[0]
             logits = flat_logits.reshape(B, n_agents, n_actions)
             lp = jax.nn.log_softmax(logits)
@@ -166,7 +175,11 @@ def train_vabl_smax(
                 aux_lp, flat_next_t_actions[..., None], axis=-1).squeeze(-1)
             aux_loss = -aux_taken.mean()
             aux_term = aux_lambda_eff * aux_loss if _use_aux_loss else jnp.zeros_like(aux_loss)
-            return p_loss + config.entropy_coef * e_loss + aux_term
+            if _use_vae_belief:
+                kl_term = _vae_kl_weight * (kl_total / B)
+            else:
+                kl_term = jnp.zeros_like(aux_loss)
+            return p_loss + config.entropy_coef * e_loss + aux_term + kl_term
         loss, grads = jax.value_and_grad(loss_fn)(agent_state.params)
         return agent_state.apply_gradients(grads=grads), loss
 
@@ -281,10 +294,11 @@ def train_vabl_smax(
             aux_lambda_eff = float(config.aux_lambda)
 
         for _ in range(config.ppo_epochs):
+            rng, rng_au_vae = jax.random.split(rng)
             agent_state, a_loss = actor_update(
                 agent_state, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
                 flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
-                jnp.asarray(aux_lambda_eff))
+                jnp.asarray(aux_lambda_eff), rng_au_vae)
             critic_state, c_loss = critic_update(critic_state, flat_states, returns_flat)
 
         if (iteration + 1) % log_interval == 0 or iteration == 0:

@@ -55,6 +55,15 @@ class VABLv2Config(NamedTuple):
     # Tests whether the pathology is specifically due to the SHARED encoder, as
     # opposed to attention-plus-aux being harmful anywhere.
     separate_aux_encoder: bool = False
+    # Dynamic-Belief-style VAE belief encoder (added 2026-04-22). When True,
+    # the GRU output is projected to (mu, log_sigma^2) and the belief is
+    # sampled via the reparameterization trick; a KL(N(mu, sigma^2) || N(0, I))
+    # term is returned alongside the forward outputs for the trainer to add
+    # to the loss with weight `vae_kl_weight`. This matches the architectural
+    # skeleton of Zhai et al.'s Dynamic Belief (minus their meta-learned
+    # dynamic-context module, which the Static-Belief ablation removes).
+    use_vae_belief: bool = False
+    vae_kl_weight: float = 0.005  # Zhai et al. fix beta = 0.005
     n_agents: int = 2
     n_actions: int = 6
     obs_dim: int = 520
@@ -110,6 +119,9 @@ class VABLv2Agent(nn.Module):
             logits: [n_actions]
             new_belief: [hidden_dim]
             aux_logits: [n_teammates, n_actions]
+            kl_belief: () scalar — KL(posterior || N(0, I)) when use_vae_belief,
+                       zero otherwise. The trainer adds vae_kl_weight * kl_belief
+                       to the actor loss.
         """
         cfg = self.config
         n_teammates = cfg.n_agents - 1
@@ -170,12 +182,35 @@ class VABLv2Agent(nn.Module):
             n_visible = visibility_mask.sum() + 1e-8
             context = masked_h_actions.sum(axis=0) / n_visible
 
-        # 6. GRU belief update — DIRECT concat to GRU, no extra projection
+        # 6. Belief update.
+        #
+        # Default path: GRU cell (current VABL v2).
+        # use_vae_belief path: GRU produces a hidden state which is projected
+        #   to (mu, log_sigma^2); belief is sampled via the reparameterization
+        #   trick. A KL-to-N(0, I) term is returned so the trainer can add it
+        #   to the loss with the configured weight. This matches Dynamic
+        #   Belief's architectural skeleton under the Static-Belief regime.
         gru_input = jnp.concatenate([h_obs, context])  # [2 * embed_dim]
         gru_cell = nn.GRUCell(features=cfg.hidden_dim, name="gru",
                                kernel_init=orthogonal_init(1.0),
                                recurrent_kernel_init=orthogonal_init(1.0))
-        new_belief, _ = gru_cell(prev_belief, gru_input)
+        gru_hidden, _ = gru_cell(prev_belief, gru_input)
+
+        if cfg.use_vae_belief:
+            vae_head = nn.Dense(2 * cfg.hidden_dim, name="vae_head",
+                                 kernel_init=orthogonal_init(1.0))(gru_hidden)
+            mu, log_sigma2 = jnp.split(vae_head, 2, axis=-1)
+            # Numerical-stability clamp on log-variance.
+            log_sigma2 = jnp.clip(log_sigma2, -6.0, 2.0)
+            sigma = jnp.exp(0.5 * log_sigma2)
+            rng = self.make_rng("vae")
+            eps = jax.random.normal(rng, mu.shape)
+            new_belief = mu + sigma * eps
+            # KL(N(mu, sigma^2) || N(0, I)) summed over belief dimension.
+            kl_belief = 0.5 * jnp.sum(mu ** 2 + jnp.exp(log_sigma2) - 1.0 - log_sigma2)
+        else:
+            new_belief = gru_hidden
+            kl_belief = jnp.zeros(())
 
         # 7. Policy head — small init for exploration
         logits = nn.Dense(cfg.n_actions, name="policy_head",
@@ -227,7 +262,7 @@ class VABLv2Agent(nn.Module):
                                     kernel_init=orthogonal_init(0.01))(aux_h)
         aux_logits = aux_logits_flat.reshape(n_teammates, cfg.n_actions)
 
-        return logits, new_belief, aux_logits
+        return logits, new_belief, aux_logits, kl_belief
 
 
 class VABLv2Critic(nn.Module):
