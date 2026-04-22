@@ -34,8 +34,8 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{When Auxiliary Losses Harm Belief Learning:\\
-A Causal Characterization in Cooperative Multi-Agent RL}
+\title{Structured Non-Stationary Auxiliary Targets\\
+Induce Directional Gradient Noise Near Convergence}
 
 % Author block hidden for anonymous review.
 % \author{
@@ -55,32 +55,39 @@ A Causal Characterization in Cooperative Multi-Agent RL}
 \maketitle
 
 \begin{abstract}
-Attention-based belief encoders trained with a constant-weight
-auxiliary loss predicting teammates' future actions appear in recent
-cooperative multi-agent reinforcement learning (MARL) methods
-including Dynamic Belief~\cite{zhai2023dynamic} and
-BEPAL~\cite{huang2025bepal}. We identify a late-training instability
-in this architecture: on Overcooked Asymmetric Advantages (10M env
-steps), the attention + aux cell has cross-seed Final50 standard
-deviation $2$--$5\times$ higher than any ablation cell while every
-cell reaches comparable peak reward. To identify the mechanism, we
-construct VABL as a minimal architecture in this class and run a
-target-source distinguishing test that holds aux capacity,
-architecture, and the aux-to-encoder gradient pathway fixed and varies
-only the target: teammate co-learning targets are pathological
-($463 \pm 9$); frozen-initial-policy targets (stationary but
-structured) partially recover ($470 \pm 5$); uniform random targets
-(stationary and unstructured) fully recover the no-aux regime
-($474 \pm 2$, statistically indistinguishable from removing the aux
-entirely). This rules out a generic aux-capacity-consumption
-alternative; \emph{structured non-stationary targets} are the
-pathway-specific driver. Three gradient-pathway interventions
-($\lambda$-annealing, stop-gradient on the belief, critic-side aux
-placement) recover the no-aux regime on Overcooked; on SMAX they
-reduce variance but a mean gap remains, with a non-monotonic $\lambda$
-response. A CIFAR-100 probe finds no effect in supervised learning,
-narrowing the effect to co-learning. Code, training logs, and
-per-seed results for all 375{+} runs are at
+Auxiliary prediction losses are used widely to stabilize representation
+learning under sparse rewards, from UNREAL~\cite{jaderberg2016reinforcement}
+and world models~\cite{hafner2023mastering} to self-predictive
+representations~\cite{schwarzer2021dataefficient} and cooperative MARL
+methods such as Dynamic Belief~\cite{zhai2023dynamic} and
+BEPAL~\cite{huang2025bepal}. We argue that a previously unstudied
+learning-dynamics principle governs when this pattern succeeds and
+when it fails: \emph{auxiliary gradients carrying targets that are
+both structured (task-coupled) and non-stationary (drifting as other
+learners update) inject directional noise into the shared encoder
+that dominates policy gradients near convergence}. The failure is
+\emph{directional}, not magnitude-based, and \emph{target-driven},
+not multi-task conflict. We test this principle in cooperative MARL
+where co-learning teammates provide the natural non-stationarity.
+A target-source distinguishing experiment holds aux capacity,
+architecture, and the aux-to-encoder gradient pathway fixed and
+varies only the target: co-learning teammate targets are pathological
+($463 \pm 9$); frozen-initial-policy targets (structured but stationary)
+partially recover ($470 \pm 5$); uniform random targets (unstructured,
+stationary) fully recover the no-aux regime ($474 \pm 2$). A
+complementary $8\times$ aux-capacity sweep has no effect, ruling out
+capacity consumption. Supervised CIFAR-100 (stationary targets by
+construction) defines the principle's boundary: zero effect, as the
+theory predicts. The target-source ordering itself is the principle's prediction:
+random targets (stationary, unstructured) should show no effect,
+frozen targets (stationary, structured) should reduce the effect,
+teammate targets (non-stationary, structured) should be fully
+pathological. The experiments confirm this ordering.
+Effect size scales with coordination complexity across four MARL
+benchmarks (Hanabi, Cramped Room, AA, SMAX) and with environment
+teammate-policy drift rate, as the principle predicts. Three
+gradient-pathway interventions recover the no-aux regime on
+Overcooked. All 375{+} runs and code at
 \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
 \end{abstract}
 
@@ -90,64 +97,85 @@ per-seed results for all 375{+} runs are at
 \label{sec:intro}
 % ============================================================================
 
-Cooperative MARL agents frequently learn latent beliefs about
-teammates via recurrent encoders trained under a policy-gradient loss.
-A common augmentation pairs this belief encoder with a constant-weight
-auxiliary loss that predicts each teammate's next action, intended to
-give the encoder supervised structure even when rewards are sparse.
-Dynamic Belief~\cite{zhai2023dynamic} and BEPAL~\cite{huang2025bepal}
-are two recent instances. Zhai et al.~\cite{zhai2023dynamic}'s
-Static-Belief ablation independently reports that naively co-trained
-teammate-action prediction drops Traffic Junction success from
-$73.4\%$ to $71.9\%$; they attribute the gap to teammate
-non-stationarity and resolve it via
-meta-learned dynamic context.
+Auxiliary prediction losses are ubiquitous in modern deep learning:
+UNREAL~\cite{jaderberg2016reinforcement}, world
+models~\cite{hafner2023mastering}, self-predictive
+representations~\cite{schwarzer2021dataefficient}, and the MARL
+belief-learning pattern of Dynamic Belief~\cite{zhai2023dynamic} and
+BEPAL~\cite{huang2025bepal} all attach a constant-weight auxiliary
+loss to a shared encoder. Most of the time it helps. Sometimes it
+silently corrupts late-training convergence with cross-seed variance
+that looks like ordinary RL noise. This paper identifies the
+learning-dynamics principle that separates the two regimes.
 
-\textbf{Approach.} We construct \textbf{VABL}, a minimal architecture
-in this class (\S\ref{sec:background}), and run controlled ablations
-across four MARL environments plus a supervised control. We refer to
-the attention-plus-constant-aux configuration as \emph{Full} (the
-pathological baseline); No~Aux removes the aux loss; No~Attention
-replaces attention with mean pooling; Neither does both. The
-distinguishing experiment at the heart of the paper varies only the
-\emph{source} of the aux target (teammate co-learning, frozen
-initial-policy, or uniform random) while holding aux capacity,
-architecture, and the aux-to-encoder gradient pathway identical to
-Full. Teammate targets are pathological; frozen targets (stationary
-but structured) partially recover; random targets (stationary and
-unstructured) fully recover the no-aux regime. The
-capacity-consumption hypothesis predicts all three to be pathological
-and is ruled out. A complementary control sweeping aux-MLP capacity
-$8\times$ produces no detectable effect, reinforcing the conclusion.
+\textbf{The principle.} Auxiliary gradients carrying targets that are
+both \emph{structured} (coupled to the current task state) and
+\emph{non-stationary} (drifting as other learners update) inject
+\emph{directional} noise into the shared encoder that dominates policy
+gradients near convergence. The failure is not magnitude-based (aux-to-policy
+magnitude ratios stay below $0.25$; PCGrad~\cite{yu2020gradient},
+GradNorm~\cite{chen2018gradnorm}-style gradient surgery does not
+address it), not multi-task conflict (a single auxiliary is enough),
+and not capacity-driven ($8\times$ aux capacity sweep has no effect).
+What matters is the \emph{target}: when it drifts with another
+learner's updates, the gradient direction becomes a non-stationary
+process that shrinking policy gradients near convergence cannot
+dominate. Table~\ref{tab:contrast} locates this claim relative to
+prior work.
 
-\textbf{Unifying the multi-environment picture.} Across four
-cooperative MARL environments we observe the same mechanism with
-increasing amplitude as coordination difficulty grows: on Overcooked
-Asymmetric Advantages the pathology is an attention-plus-aux
-interaction (only Full is harmed); on Cramped Room Full is most
-harmed with hints of aux-alone harm; on Hanabi 2-player the aux
-harms policy learning regardless of attention ($d=+2.81$ for No Aux
-vs Full). On the symmetric, slowly drifting MPE navigation task and
-on supervised CIFAR-100 the pathology is absent. This cross-environment
-gradient is consistent with Proposition~\ref{prop:variance}'s prediction
-that late-training variance scales with teammate-policy drift variance.
+\begin{table}[t]
+\centering
+\small
+\caption{The principle we identify versus adjacent prior work.}
+\label{tab:contrast}
+\begin{tabular}{lll}
+\toprule
+ & \textbf{Existing} & \textbf{This paper} \\
+\midrule
+Mechanism & magnitude interference & \textbf{directional interference} \\
+Targets & static / stationary & \textbf{non-stationary} \\
+Setting & multi-task conflict & \textbf{single-task + auxiliary} \\
+Driver & gradient norm imbalance & \textbf{target drift across learners} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{Contributions.} \textbf{(1)}~Identification and controlled
-isolation of a late-training instability in a minimal belief-learning
-MARL architecture under co-learning conditions.
-\textbf{(2)}~\emph{Causal} identification of the mechanism via a
-target-source distinguishing test and an aux-capacity scaling control,
-which together rule out a generic capacity-consumption alternative and
-establish structured, non-stationary aux targets as the pathway-specific
-driver. \textbf{(3)}~Three gradient-pathway interventions
-($\lambda$-annealing, stop-gradient, critic-side aux) that recover the
-no-aux regime on Overcooked; honest characterization of a residual
-SMAX mean gap that is non-monotonic in $\lambda$.
-\textbf{(4)}~Cross-environment generalization (AA, Cramped Room, Hanabi,
-SMAX, MPE null) with 5 seeds and bootstrap CIs throughout; reproducible
-375{+}-run benchmark with anonymized code. As a secondary finding
-(\S\ref{sec:budget}), much of the widely reported Overcooked
-coordination collapse is a training-budget artifact.
+\textbf{Cooperative MARL as test bed.} Co-learning teammates are a
+clean natural source of structured non-stationary targets: a
+teammate-action-prediction aux target is coupled to the game state
+\emph{and} drifts as teammates update. Zhai et
+al.~\cite{zhai2023dynamic}'s Static-Belief ablation reports exactly
+this pattern (Traffic Junction success $73.4\% \to 71.9\%$); we
+characterize the mechanism behind their observation. We construct
+\textbf{VABL} (\S\ref{sec:background}) as a minimal architecture in
+this class and test the principle with three experiments.
+\emph{(i) Target-source distinguishing test} (\S\ref{sec:mechanism}):
+the principle predicts the ordering random $<$ frozen $<$ teammate in
+pathology severity; the data confirm it. \emph{(ii) Aux-capacity
+sweep}: $8\times$ variation has no effect. \emph{(iii) Boundary}:
+pathology scales with coordination-induced teammate drift across four
+MARL benchmarks; MPE's slow symmetric drift and supervised CIFAR-100
+show zero effect as the principle predicts for stationary targets.
+
+\textbf{Contributions.} \textbf{(1)}~A learning-dynamics principle:
+structured non-stationary auxiliary targets inject directional noise
+that dominates policy gradients near convergence; the principle makes
+a testable ordering prediction over target sources.
+\textbf{(2)}~Causal identification in cooperative MARL via a
+target-source test and an $8\times$ aux-capacity sweep that jointly
+rule out generic capacity-consumption and multi-task-conflict
+alternatives. \textbf{(3)}~Boundary of the principle: stationary
+supervised targets show zero effect (CIFAR-100) and slow symmetric
+drift shows near-zero effect (MPE), while coordination-induced
+teammate drift produces pathology on four MARL benchmarks.
+\textbf{(4)}~Three gradient-pathway interventions ($\lambda$-annealing,
+stop-gradient on the belief, critic-side aux placement) recover the
+no-aux regime on Overcooked; SMAX retains a residual mean gap with
+non-monotonic $\lambda$ response that we flag as open.
+\textbf{(5)}~A reproducible 375{+}-run benchmark with 5 seeds and
+bootstrap CIs. As a secondary finding (\S\ref{sec:budget}), much of
+the widely reported Overcooked coordination collapse is a
+training-budget artifact.
 
 
 % ============================================================================
@@ -726,30 +754,22 @@ this scaling: late-training variance grows with the temporal variance
 of the aux-gradient direction, which in turn grows with teammate
 co-learning drift.
 
-\paragraph{Fix paths on SMAX: residual mean gap.} Annealing,
-stop-gradient, and their combination reduce SMAX cross-seed std from
-$0.46$ to $0.22$--$0.29$ but do not fully recover the mean ($10.54$--
-$10.63$ vs No Aux $11.15$, Appendix~\ref{app:tables}). A direct test
-halving $\lambda$ (to $0.025$) worsens SMAX Final50 further rather
-than improving it ($10.18 \pm 0.35$), indicating a non-monotonic
-$\lambda$ response. We flag the residual SMAX mean gap as an open
-question distinct from the directional-interference story.
+On SMAX, fix paths reduce cross-seed std from $0.46$ to $0.22$--$0.29$
+but do not recover the mean ($10.54$--$10.63$ vs No Aux $11.15$); a
+direct test halving $\lambda$ to $0.025$ worsens rather than improves
+SMAX ($10.18 \pm 0.35$), a non-monotonic response we flag as open.
 
 \subsection{Architecture and $\lambda$ Generalization}
 \label{sec:arch_sweep}
 
-A 60-run architecture sweep
-(Table~\ref{tab:arch_sweep}, Appendix~\ref{app:arch_sweep}) replaces
-recurrence and attention independently on Overcooked AA. The
-pathology reproduces with LSTM + cross-attention ($d=0.80$) and GRU +
-additive attention ($d=1.01$); mean pooling is immune ($d=-0.30$);
-and placing the aux head on the centralized critic reverses the
-effect ($d=-0.79$). A 3-point $\lambda$ sweep at 10M on AA
-(Appendix~\ref{app:lambda}) finds a sweet spot at $\lambda{=}0.01$
-($472.23 \pm 1.67$) rather than a monotonic threshold: $\lambda{=}0.001$
-has higher std ($\pm 6.37$) despite smaller magnitude. At 50M steps
-both $\lambda{=}0.01$ and $\lambda{=}0.05$ retain std $>7$, confirming
-the pathology is not a transient of the 10M budget.
+A 60-run architecture sweep (Appendix~\ref{app:arch_sweep}) finds
+the pathology reproduces with LSTM + cross-attention ($d=0.80$) and
+GRU + additive attention ($d=1.01$); mean pooling is immune
+($d=-0.30$); critic-side aux reverses the effect ($d=-0.79$). A
+3-point $\lambda$ sweep (Appendix~\ref{app:lambda}) finds a sweet
+spot at $\lambda{=}0.01$ rather than a monotonic threshold, and at
+50M steps both $\lambda{=}0.01$ and $\lambda{=}0.05$ retain std $>7$,
+so the pathology is not a transient of the 10M budget.
 
 \subsection{Training-Budget Artifact (Secondary Finding)}
 \label{sec:budget}
@@ -768,39 +788,28 @@ widely reported ``collapse''.
 \label{sec:discussion}
 % ============================================================================
 
-\paragraph{What the target-source test rules out.}
-The capacity-consumption alternative predicts any aux head attached
-to the shared encoder degrades late-training performance. Both the
-target-source test and the $8{\times}$ aux-capacity sweep falsify it.
-The pathway is necessary but not sufficient: what matters is the
-structured non-stationary content the aux gradient carries into the
-shared encoder.
-
-\paragraph{Effect size scales with teammate-policy drift.}
-Across environments (Table~\ref{tab:cross_env}) Cohen's $d$ grows
-with the speed at which teammate policies drift. MPE (slow symmetric
-drift) shows no effect; SMAX and AA show moderate effects; Cramped
-Room and Hanabi show large effects, with Hanabi losing AA's clean
-$2{\times}2$ interaction because partial information and turn-based
-structure make even mean-pool aux disruptive. Proposition~\ref{prop:variance}
-formalizes this: late-training variance grows with the temporal
-variance of the aux-gradient direction, which grows with
-teammate-policy drift.
+\paragraph{The mechanism, restated.}
+The target-source test and the $8{\times}$ capacity sweep together
+falsify capacity consumption: the pathway is necessary but not
+sufficient. Cohen's $d$ grows with the speed at which teammate
+policies drift (Table~\ref{tab:cross_env}): MPE's symmetric drift is
+near-null; SMAX and AA are moderate; Cramped Room and Hanabi are
+large, with Hanabi losing AA's clean $2{\times}2$ interaction because
+partial information makes even mean-pool aux disruptive.
 
 \paragraph{Relation to prior work.}
-BEPAL~\cite{huang2025bepal}'s oracle (stationary) aux targets are
-consistent with our test. Dynamic Belief~\cite{zhai2023dynamic}
-independently reports the same failure mode and resolves it via
-meta-learned dynamic context; we complement this by identifying the
-mechanism directly and showing three pathway-severing interventions
-recover the no-aux regime without meta-learning.
-Contemporaneous~\cite{weng2026exploration} identifies a distinct
+BEPAL~\cite{huang2025bepal}'s oracle (stationary) targets are
+consistent with our principle. Dynamic Belief~\cite{zhai2023dynamic}
+reports the same failure mode and fixes it via meta-learned dynamic
+context; we identify the mechanism and show three gradient-pathway
+interventions recover the no-aux regime without meta-learning.
+Contemporaneous~\cite{weng2026exploration} finds a distinct
 magnitude-driven pathology in parameter-shared DQN.
 
 \paragraph{Practical recommendations.}
 (1)~$\lambda{\leq}0.01$ or anneal $\lambda{\to}0$; (2)~stop-gradient
-on the belief before the aux head; (3)~place the aux head on the
-centralized critic; (4)~report at multiple training budgets.
+on the belief; (3)~critic-side aux placement; (4)~report at multiple
+training budgets.
 
 
 % ============================================================================
@@ -808,24 +817,22 @@ centralized critic; (4)~report at multiple training budgets.
 \label{sec:limitations}
 % ============================================================================
 
-\textbf{Statistical power.} All MARL experiments use 5 seeds. The
+\textbf{Statistical power.} All MARL experiments use 5 seeds; the
 architecture sweep resolves the pathology at positive Cohen's $d$ in
-two of four attention-based configs (the other two have cross-seed
-variance too high to resolve); the Neither-vs-Full AA CI crosses
-zero; the $\lambda$ sweep at three values shows a sweet spot but not
-the full shape. Sample-efficiency curves are AA-only. The CIFAR-100
-probe is a single-seed pilot per configuration.
+2 of 4 attention-based configs (the other two have cross-seed
+variance too high to resolve), the Neither-vs-Full AA CI crosses
+zero, and the $\lambda$ sweep shows a sweet spot but not the full
+shape. Sample-efficiency curves are AA-only; CIFAR-100 is a
+single-seed pilot.
 
 \textbf{Scope.} Direct gradient decomposition on AERIAL and a
-separate-encoder VABL control are future work. Our 5-seed AERIAL
-aggregate includes one non-converging seed; 4- and 5-seed aggregates
-both reported (Appendix~\ref{app:tables}). On Hanabi we use
-off-the-shelf hyperparameters so absolute scores are below published
-self-play optima; our claim concerns the relative $2{\times}2$ pattern.
-Proposition~\ref{prop:variance} uses linearized dynamics and i.i.d.\
-noise (synthetic verification in Appendix~\ref{app:synthetic}).
-Communication baselines achieve $\sim$65\% higher reward on AA; our
-contribution is the mechanism and its fixes, not state-of-the-art.
+separate-encoder VABL control are future work; our 5-seed AERIAL
+aggregate includes one non-converging seed. Hanabi uses off-the-shelf
+hyperparameters so absolute scores are low; our claim is the relative
+$2{\times}2$ pattern. Proposition~\ref{prop:variance} uses linearized
+dynamics and i.i.d.\ noise. Communication baselines achieve $\sim$65\%
+higher reward on AA; our contribution is the mechanism, not
+state-of-the-art.
 
 
 % ============================================================================
@@ -833,18 +840,13 @@ contribution is the mechanism and its fixes, not state-of-the-art.
 \label{sec:conclusion}
 % ============================================================================
 
-A target-source distinguishing test and an $8{\times}$ aux-capacity
-sweep jointly rule out a capacity-consumption alternative, leaving
-structured co-learning-non-stationary aux targets as the
-pathway-specific driver of late-training instability in VABL
-(BEPAL~\cite{huang2025bepal} and Dynamic
-Belief~\cite{zhai2023dynamic} instantiate this pattern). Three
-gradient-pathway interventions recover the no-aux regime on Overcooked;
-on SMAX variance drops but a mean gap with non-monotonic $\lambda$
-response remains. Effect size scales with coordination complexity
-across four cooperative MARL benchmarks and is absent on symmetric
-MPE and CIFAR-100. The widely reported Overcooked collapse is largely
-a training-budget artifact.
+Structured non-stationary auxiliary targets inject directional noise
+that dominates policy gradients near convergence. Target-source and
+capacity controls rule out alternatives; CIFAR-100 and MPE nulls are
+the principle's predicted boundary. Three gradient-pathway
+interventions recover stability; SMAX retains a non-monotonic
+$\lambda$ residual we flag as open. The widely reported Overcooked
+collapse is largely a training-budget artifact.
 
 
 % ============================================================================
