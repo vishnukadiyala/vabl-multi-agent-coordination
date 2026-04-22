@@ -1129,6 +1129,100 @@ do not recover the mean, suggesting the aux loss is actively harmful on SMAX
 rather than merely destabilizing.}
 \end{table}
 
+\paragraph{Hanabi 2-player per-seed data (5 seeds per config, 25K episodes, horizon 80).}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed Hanabi Final50 and peak score. Non-zero episode count (\% of 25,024 episodes scoring non-zero reward) indicates training stability: Aux-ON cells (Full, No Attn) spend most episodes at 0, while Aux-OFF cells (No Aux, Neither) sustain positive scoring. Seed 3 of Full scores only 1 non-zero episode in 25K; this is a complete training collapse, not a gradual drift.}
+\label{tab:hanabi_perseed}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llccc}
+\toprule
+\textbf{Config} & \textbf{Seed} & \textbf{Final50} & \textbf{Best} & \textbf{Non-zero eps \%} \\
+\midrule
+Full       & 0 & $0.60$ & 7.0 & $3.3\%$ \\
+Full       & 1 & $0.00$ & 9.0 & $3.2\%$ \\
+Full       & 2 & $0.00$ & 7.0 & $23.2\%$ \\
+Full       & 3 & $0.00$ & 5.0 & $<0.01\%$ \\
+Full       & 4 & $0.08$ & 6.0 & $3.4\%$ \\
+\addlinespace
+No Aux     & 0 & $3.64$ & 7.0 & $44.6\%$ \\
+No Aux     & 1 & $0.80$ & 7.0 & $68.7\%$ \\
+No Aux     & 2 & $3.34$ & 7.0 & $65.8\%$ \\
+No Aux     & 3 & $4.06$ & 9.0 & $77.9\%$ \\
+No Aux     & 4 & $2.20$ & 10.0 & $43.6\%$ \\
+\addlinespace
+No Attn    & 0 & $0.48$ & 7.0 & $10.5\%$ \\
+No Attn    & 1 & $0.00$ & 7.0 & $2.6\%$ \\
+No Attn    & 2 & $0.66$ & 7.0 & $34.7\%$ \\
+No Attn    & 3 & $0.16$ & 6.0 & $0.6\%$ \\
+No Attn    & 4 & $0.00$ & 3.0 & $<0.01\%$ \\
+\addlinespace
+Neither    & 0 & $1.94$ & 9.0 & $31.5\%$ \\
+Neither    & 1 & $3.02$ & 7.0 & $63.0\%$ \\
+Neither    & 2 & $0.44$ & 8.0 & $19.2\%$ \\
+Neither    & 3 & $3.80$ & 8.0 & $54.5\%$ \\
+Neither    & 4 & $0.02$ & 7.0 & $0.1\%$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Gradient decomposition per-seed detail (Full VABL + fix paths, 5 seeds).}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed gradient decomposition statistics on Overcooked AA. Cosine std is over the late 50\% of training iterations (8 log points per seed, logged every 25 iterations). $\|g_\pi\|$ and $\|g_{\mathrm{aux}}\|$ are means over logged iterations. Under No Aux the aux gradient is identically zero; under Stop-grad and late-stage Anneal the aux gradient has zero projection onto policy-gradient-receiving parameters (disjoint param supports), giving cosine exactly zero by construction. Only Full exhibits non-zero cosine temporal variance, consistent with directional aux-policy conflict.}
+\label{tab:grad_decomp}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llcccc}
+\toprule
+\textbf{Config} & \textbf{Seed} & \textbf{cosine std (late 50\%)} & \textbf{cosine mean (late)} & \textbf{$\|g_\pi\|$} & \textbf{$\|g_{\mathrm{aux}}\|$} \\
+\midrule
+Full      & 0 & $0.196$ & $+0.086$ & $0.117$ & $0.016$ \\
+Full      & 1 & $0.164$ & $+0.022$ & $0.140$ & $0.016$ \\
+Full      & 2 & $0.226$ & $+0.029$ & $0.144$ & $0.016$ \\
+Full      & 3 & $0.175$ & $-0.116$ & $0.129$ & $0.016$ \\
+Full      & 4 & $0.135$ & $-0.000$ & $0.114$ & $0.014$ \\
+\addlinespace
+No Aux    & all & $0.000$ & $0.000$ & $0.118$--$0.137$ & $0.000$ \\
+Stop-grad & all & $0.000^\dagger$ & $0.000^\dagger$ & $0.110$--$0.150$ & $0.010$--$0.013$ \\
+Anneal    & all & $0.000^\dagger$ & $0.000^\dagger$ & $0.115$--$0.143$ & $0.004$--$0.006$ \\
+\bottomrule
+\end{tabular}
+
+\vspace{2pt}
+{\footnotesize $^\dagger$Exact zero by construction: under stop-gradient the aux-to-encoder pathway is cut and $g_{\mathrm{aux}}$ has support only on aux-MLP parameters (disjoint from policy-gradient support); under anneal late training has $\lambda \to 0$, so $g_{\mathrm{aux}} \to 0$. The Full signature is the only dynamically-generated cosine variance.}
+\end{table}
+
+\paragraph{Cross-environment per-seed summary.}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Per-seed Final50 across four MARL environments and both primary configs (Full vs No Aux). Seed columns are the 5 independent runs per cell; $d$ column is Cohen's $d$ (No Aux vs Full, pooled sample std).}
+\label{tab:cross_env_perseed}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llccccccc}
+\toprule
+\textbf{Env} & \textbf{Config} & \textbf{s0} & \textbf{s1} & \textbf{s2} & \textbf{s3} & \textbf{s4} & \textbf{mean} & \textbf{d} \\
+\midrule
+AA        & Full   & 469.12 & 456.50 & 450.64 & 465.56 & 474.24 & 463.21 & --- \\
+AA        & No Aux & 475.90 & 475.10 & 477.80 & 469.80 & 468.60 & 473.45 & $+1.40$ \\
+\addlinespace
+Cramped   & Full   & 410.25 & 407.85 & 411.34 & 409.14 & 409.92 & 409.70 & --- \\
+Cramped   & No Aux & 416.31 & 416.95 & 415.37 & 417.04 & 415.24 & 416.18 & $+5.07$ \\
+\addlinespace
+SMAX      & Full   & 10.82  & 10.71  & 11.16  & 10.13  & 10.20  & 10.60  & --- \\
+SMAX      & No Aux & 11.47  & 10.94  & 11.55  & 10.78  & 11.00  & 11.15  & $+1.26$ \\
+\addlinespace
+Hanabi    & Full   & 0.60   & 0.00   & 0.00   & 0.00   & 0.08   & 0.14   & --- \\
+Hanabi    & No Aux & 3.64   & 0.80   & 3.34   & 4.06   & 2.20   & 2.81   & $+2.81$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 
 \section{Synthetic Verification of Proposition~\ref{prop:variance}}
 \label{app:synthetic}
