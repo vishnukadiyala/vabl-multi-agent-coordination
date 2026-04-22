@@ -365,10 +365,13 @@ Figure~\ref{fig:gradients} measures Full VABL's late-training signature
 $I_{\mathrm{dir}} \gg I_{\mathrm{mag}}$.
 
 \paragraph{Step 2: deriving $\Sigma_\varepsilon$ from teammate drift.}
-Decompose $g_{\mathrm{aux}}(t) = \bar g_{\mathrm{aux}} + \varepsilon(t)$
-into mean and zero-mean fluctuation. Because the aux loss depends on
-teammate policy $\pi_j^{(t)}$, a first-order expansion around the
-time-averaged policy $\bar\pi_j$ gives
+Let $\pi_j \in \mathbb{R}^{d_\pi}$ denote the teammate's policy
+represented either by its parameters or, equivalently in the linear
+regime, by its action-probability vector stacked over the observed
+state distribution. Decompose the aux gradient as $g_{\mathrm{aux}}(t)
+= \bar g_{\mathrm{aux}} + \varepsilon(t)$. A first-order expansion of
+$g_{\mathrm{aux}}$ around $\bar\pi_j$, the time-averaged teammate
+policy over the analysis window, gives
 \begin{equation}
     \varepsilon(t) \approx J_\pi \,(\pi_j^{(t)} - \bar\pi_j),
     \qquad
@@ -377,14 +380,21 @@ time-averaged policy $\bar\pi_j$ gives
     \Sigma_\pi = \mathrm{Cov}_t[\pi_j^{(t)}],
     \label{eq:drift_to_noise}
 \end{equation}
-where $J_\pi = \partial g_{\mathrm{aux}}/\partial \pi_j$ evaluated at
-$\bar\pi_j$. The gradient noise covariance factors through the
-teammate-policy drift covariance. Two limits:
-frozen teammate ($\Sigma_\pi = 0$) gives $\Sigma_\varepsilon \to 0$;
-a target constructed not to depend on teammate policy ($J_\pi = 0$,
-e.g.\ random targets) also gives $\Sigma_\varepsilon \to 0$. The
-target-source distinguishing test (\S\ref{sec:mechanism}) realizes
-both limits empirically.
+where $J_\pi \in \mathbb{R}^{|\theta| \times d_\pi} = \partial
+g_{\mathrm{aux}}/\partial \pi_j |_{\bar\pi_j}$ and $J_\pi$ absorbs
+the $\lambda$ scaling of $g_{\mathrm{aux}}$. The gradient noise
+covariance factors through the teammate-policy drift covariance. Two
+limits: frozen teammate ($\Sigma_\pi = 0$) gives
+$\Sigma_\varepsilon \to 0$; a target constructed not to depend on
+teammate policy ($J_\pi = 0$, e.g.\ random or supervised targets)
+also gives $\Sigma_\varepsilon \to 0$. The target-source
+distinguishing test (\S\ref{sec:mechanism}) realizes both limits
+empirically.
+The linearization is local in policy space; it is exact for small
+per-window drift $\|\pi_j^{(t)} - \bar\pi_j\|$ and is our main
+quantitative simplification. Restricting the analysis window to
+late training (where policy convergence implies smaller drift per
+iteration) improves the approximation.
 
 \paragraph{Step 3: noise-driven parameter variance.}
 Near a local optimum $\theta^*$ the policy loss is approximately
@@ -400,10 +410,10 @@ H^{-1} \bar g_{\mathrm{aux}}$, the displacement $\delta(t) = \theta(t)
 
 \begin{proposition}[Drift-to-variance]
 \label{prop:variance}
-Under Eq.~\eqref{eq:dynamics} with $\varepsilon(t)$ treated as i.i.d.\
-with covariance given by Eq.~\eqref{eq:drift_to_noise} and spectral
-radius $\rho(I - \alpha H) < 1$, the steady-state displacement
-variance satisfies
+Under Eq.~\eqref{eq:dynamics} with $\varepsilon(t)$ treated as
+i.i.d.\ with covariance given by Eq.~\eqref{eq:drift_to_noise} and
+spectral radius $\rho(I - \alpha H) < 1$, the steady-state
+displacement variance satisfies
 \begin{equation}
     \mathbb{E}[\|\delta\|^2]
     \;\propto\;
@@ -413,52 +423,85 @@ variance satisfies
 \end{equation}
 \end{proposition}
 
+Real $\varepsilon(t)$ is autocorrelated (consecutive teammate policies
+differ by one gradient step). A colored-noise treatment would
+multiply the right-hand side by an autocorrelation-time factor
+$\tau_c$ that is $O(1)$ when teammate updates are frequent relative to
+$1/\lambda_{\min}(H)$ and larger when they are slower, preserving the
+scaling with $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ and
+$\lambda_{\min}(H)$.
+
 \paragraph{Step 4: threshold and testable predictions.}
-Displacement competes with policy progress, so instability onset
-corresponds to the condition
+Displacement competes with the signal from policy-gradient progress.
+Let $\eta = \mathbb{E}_t[\|H \delta(t)\|] \sim \alpha \eta^2 /
+\lambda_{\min}(H)$ estimate the per-iteration progress scale.
+Instability onset corresponds to
 \begin{equation}
-    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}
+    \underbrace{\frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}}_{\text{aux-drift noise (variance)}}
     \;\gtrsim\;
-    C(\alpha, \eta),
+    \underbrace{\frac{\alpha \eta^2}{\lambda_{\min}(H)}}_{\text{policy signal (progress)}},
     \label{eq:threshold}
 \end{equation}
-where $\eta$ is the per-iteration policy-gradient norm and $C$ the
-policy-signal scale. This yields three
-testable predictions. \textbf{(a) Stationarity null}: $\Sigma_\pi
-\approx 0$ (supervised labels, symmetric slow drift) $\Rightarrow$
-no pathology. \textbf{(b) Pathway null}: interventions that drive
+i.e., aux-drift variance exceeds the displacement attributable to
+policy-gradient progress at the same operating point. This yields
+three testable predictions:
+\textbf{(a) Stationarity null}: $\Sigma_\pi \approx 0$ (supervised
+labels, symmetric slow drift) $\Rightarrow$ no pathology.
+\textbf{(b) Pathway null}: interventions that drive
 $J_\pi \to 0$ in the encoder subspace (stop-gradient, critic-side
-aux, annealed $\lambda$) $\Rightarrow$ recovery. \textbf{(c) Target
-ordering}: ranking target sources by $\Sigma_\pi$ (random $= 0$,
-frozen $= 0$, co-learning $> 0$) predicts ranking in pathology
-severity. All three are tested in
-\S\ref{sec:mechanism}--\ref{sec:cross_env}; the derivation (scope:
-quadratic loss, linearized dynamics, i.i.d.\ noise, first-order
-expansion) in Appendix~\ref{app:proof} uses the Lyapunov equation
-$\Sigma_\delta = A \Sigma_\delta A^\top + \alpha^2 \Sigma_\varepsilon$
-with $A = I - \alpha H$ and substitutes Eq.~\eqref{eq:drift_to_noise}.
+aux, annealed $\lambda$) $\Rightarrow$ recovery.
+\textbf{(c) Target ordering}: ranking target sources by the
+$J_\pi\!\cdot\Sigma_\pi$ coupling (random targets $\Rightarrow J_\pi
+{=} 0$; frozen targets $\Rightarrow \Sigma_\pi {=} 0$; co-learning
+$\Rightarrow$ both non-zero) predicts the pathology-severity ordering.
+All three are tested in \S\ref{sec:mechanism}--\ref{sec:cross_env}.
+
+\textbf{Scope of the $\lambda$ prediction.}
+Since $g_{\mathrm{aux}} \propto \lambda$, the first-order bound
+predicts displacement variance $\propto \lambda^2$. Our $\lambda$
+sweep (Appendix~\ref{app:lambda}) is \emph{not} monotonic: Final50
+std at $\lambda \in \{0.001, 0.01, 0.05\}$ is
+$\{6.37, 1.67, 8.55\}$ respectively. The first-order bound holds
+locally in $\lambda$ (variance increases as $\lambda$ grows from
+$0.01$ to $0.05$) but fails across the full range because aux-head
+representations co-adapt with $\lambda$: at very small $\lambda$ the
+aux head receives too little signal to organize, so $J_\pi$ itself
+depends on $\lambda$ in a way the first-order analysis does not
+capture. The monotonic-$\lambda$ prediction should be read as
+``within a $\lambda$ range where aux-head representations are
+qualitatively unchanged,'' not as a global prediction across
+$\lambda \in [0, \infty)$.
 
 \paragraph{Interpreting $J_\pi$.}
-$J_\pi$ is the sensitivity of the cross-entropy aux gradient to the
-teammate action distribution, evaluated around the time-averaged
-teammate policy. In VABL its column-space coincides with the
-pathway through attention/GRU/$\phi_\theta$ by which teammate
-one-hot inputs influence the aux head's predictions: large when
-the aux head is tightly tuned to the current teammate (steep
-cross-entropy landscape around $\bar\pi_j$), small when the encoder
-is structurally insensitive (mean pooling collapses heterogeneous
-teammates; stop-gradient cuts the encoder-side coupling; critic-side
-placement routes $g_{\mathrm{aux}}$ away from the actor encoder
-entirely). The cosine temporal std in Figure~\ref{fig:gradients} is
-a finite-sample proxy for $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$
-normalized by gradient magnitudes. Figure~\ref{fig:proxy} plots
-this proxy against Final50 cross-seed std across our four logged
-conditions: the proxy predicts the observed variance ordering
-(linear $R^2 = 0.94$ across conditions; three of four conditions
-have proxy zero by pathway construction, so this is an ordering
-check more than a slope estimate). Within Full's 5 seeds, per-seed
-cosine std correlates positively with per-seed peak-to-Final50 drop
-($r = +0.40$; weak at $n{=}5$).
+$J_\pi$ is the sensitivity of the aux gradient to the teammate action
+distribution, evaluated around the time-averaged teammate policy. In
+VABL its column space coincides with the pathway through
+attention/GRU/$\phi_\theta$ by which teammate one-hot inputs influence
+the aux head's predictions: large when the aux head is tightly tuned
+to the current teammate, small when the encoder is structurally
+insensitive (mean pooling collapses heterogeneous teammates,
+stop-gradient cuts the encoder-side coupling, critic-side placement
+routes $g_{\mathrm{aux}}$ away from the actor encoder entirely).
+
+\paragraph{From cosine to proxy.}
+Linearizing $\cos(g_\pi, g_{\mathrm{aux}})$ about
+$(g_\pi, \bar g_{\mathrm{aux}})$ at fixed norms gives
+$\mathrm{Var}_t[\cos] \approx \hat g_\pi^\top \Sigma_\varepsilon
+\hat g_\pi / \|\bar g_{\mathrm{aux}}\|^2$ where $\hat g_\pi =
+g_\pi/\|g_\pi\|$. For symmetric noise $\Sigma_\varepsilon$, this is
+the $\hat g_\pi$-projection of $\Sigma_\varepsilon$ and upper-bounded
+by $\mathrm{tr}(\Sigma_\varepsilon)/\|\bar g_{\mathrm{aux}}\|^2$, so
+the cosine temporal std is a finite-sample proxy for normalized
+$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)^{1/2}$. We measure both
+quantities on the analysis window (final $50\%$ of training, where
+the local-quadratic approximation is most valid);
+Figure~\ref{fig:proxy} plots the proxy against Final50 cross-seed
+std across our four logged conditions (linear $R^2 = 0.94$ across
+conditions; three of four conditions have proxy zero by pathway
+construction, so the plot verifies the ordering rather than the
+slope). Within Full's 5 seeds, per-seed cosine std correlates
+positively with per-seed peak-to-Final50 drop ($r = +0.40$, weak at
+$n{=}5$).
 
 \paragraph{Drift-gated aux.}
 Eq.~\eqref{eq:threshold} yields an online controller: maintain a
