@@ -32,6 +32,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import jax.flatten_util
 import numpy as np
 import optax
 from flax.training.train_state import TrainState
@@ -72,6 +73,9 @@ def train_vabl_vec(
     log_interval: int = 10,
     save_path: str = None,
     aux_frozen_target_policy: bool = False,
+    aux_noise_targets: bool = False,
+    log_gradient_decomp: bool = False,
+    grad_log_interval: int = 25,
 ):
     if config is None:
         config = VABLConfig()
@@ -183,6 +187,56 @@ def train_vabl_vec(
         return jax.vmap(forward_one)(flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
 
     @jax.jit
+    def compute_separate_gradients(
+        params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+        flat_actions, flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff,
+    ):
+        """Compute policy-only and aux-only gradients separately for the diagnostic.
+
+        Matches the terms inside `actor_update.loss_fn` but splits the PPO+entropy
+        loss from the aux loss so we can measure norms and cosine between the two
+        gradient directions in the full param tree.
+        """
+        def policy_only_loss(p):
+            flat_logits, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            B = flat_actions.shape[0]
+            logits = flat_logits.reshape(B, n_agents, n_actions)
+            lp = jax.nn.log_softmax(logits)
+            nlp = jnp.take_along_axis(lp, flat_actions[..., None], axis=-1).squeeze(-1).sum(axis=-1)
+            ratio = jnp.clip(jnp.exp(nlp - old_lp_sum), 0.0, 5.0)
+            s1 = ratio * advantages_flat
+            s2 = jnp.clip(ratio, 1 - config.clip_param, 1 + config.clip_param) * advantages_flat
+            p_loss = -jnp.minimum(s1, s2).mean()
+            pr = jax.nn.softmax(logits)
+            ent = -(pr * lp).sum(axis=-1).mean(axis=-1)
+            e_loss = -ent.mean()
+            return p_loss + config.entropy_coef * e_loss
+
+        def aux_only_loss(p):
+            _, flat_aux = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx)
+            aux_lp = jax.nn.log_softmax(flat_aux, axis=-1)
+            aux_taken = jnp.take_along_axis(
+                aux_lp, flat_next_t_actions[..., None], axis=-1
+            ).squeeze(-1)
+            aux_loss = -aux_taken.mean()
+            return aux_lambda_eff * aux_loss
+
+        g_policy = jax.grad(policy_only_loss)(params)
+        g_aux = jax.grad(aux_only_loss)(params)
+
+        # Flatten both gradient trees to single vectors for inner products.
+        flat_gp, _ = jax.flatten_util.ravel_pytree(g_policy)
+        flat_ga, _ = jax.flatten_util.ravel_pytree(g_aux)
+
+        norm_p = jnp.linalg.norm(flat_gp)
+        norm_a = jnp.linalg.norm(flat_ga)
+        dot = jnp.sum(flat_gp * flat_ga)
+        cos = dot / (norm_p * norm_a + 1e-12)
+        return norm_p, norm_a, cos
+
+    @jax.jit
     def frozen_policy_argmax_actions(frozen_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx):
         """Run a FROZEN policy snapshot on rollout obs/beliefs and return deterministic
         argmax actions for each agent. Used to compute stationary aux targets that do
@@ -249,6 +303,7 @@ def train_vabl_vec(
     # ---- Training loop ----
     rewards_history = []
     best_reward = float("-inf")
+    grad_log = []  # list of {iteration, norm_policy, norm_aux, cosine}
 
     print("  Starting (compiling on first iteration)...")
     t0 = time.time()
@@ -356,7 +411,21 @@ def train_vabl_vec(
 
         # Next-step teammate actions for auxiliary loss
         # Shift acts_NH by 1 along time axis: predict t+1 from belief at t
-        if aux_frozen_target_policy:
+        if aux_noise_targets:
+            # Replace aux targets with uniform random integers resampled each
+            # iteration. Aux network capacity + gradient pathway preserved; the
+            # co-learning SIGNAL is destroyed (targets carry no teammate info).
+            # Predicts different things per hypothesis:
+            #   paper's story (directional co-learning noise): unclear — noise
+            #     is IID, not teammate-drift-correlated; Sigma_eps may differ
+            #     in structure from co-learning case.
+            #   capacity story: pathology persists (aux still consumes capacity).
+            rng, noise_rng = jax.random.split(rng)
+            noise_targets = jax.random.randint(
+                noise_rng, shape=(n_envs, horizon, n_agents, n_teammates),
+                minval=0, maxval=n_actions, dtype=jnp.int32)
+            next_t_acts_NHA = noise_targets
+        elif aux_frozen_target_policy:
             # Replace actual teammate-action targets with the FROZEN-POLICY's
             # deterministic (argmax) actions on the same rollout obs/beliefs at
             # step t+1. This keeps aux capacity, architecture, and the
@@ -395,6 +464,22 @@ def train_vabl_vec(
         else:
             aux_lambda_eff = float(config.aux_lambda)
 
+        # Gradient decomposition diagnostic (before the PPO epochs so the
+        # snapshot is taken at the same params we're about to update from).
+        if log_gradient_decomp and (iteration % grad_log_interval == 0):
+            np_, na_, co_ = compute_separate_gradients(
+                agent_state.params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+                flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
+                jnp.asarray(aux_lambda_eff),
+            )
+            grad_log.append({
+                "iteration": int(iteration),
+                "norm_policy": float(np_),
+                "norm_aux": float(na_),
+                "cosine": float(co_),
+                "aux_lambda_eff": float(aux_lambda_eff),
+            })
+
         # PPO epochs
         for _ in range(config.ppo_epochs):
             agent_state, a_loss = actor_update(
@@ -425,10 +510,13 @@ def train_vabl_vec(
         "aux_anneal_fraction": float(config.aux_anneal_fraction),
         "separate_aux_encoder": bool(config.separate_aux_encoder),
         "aux_frozen_target_policy": bool(aux_frozen_target_policy),
+        "aux_noise_targets": bool(aux_noise_targets),
+        "log_gradient_decomp": bool(log_gradient_decomp),
         "n_agents": int(config.n_agents),
         "n_actions": int(config.n_actions),
         "obs_dim": int(config.obs_dim),
         "hidden_dim": int(config.hidden_dim),
+        "aux_hidden_dim": int(config.aux_hidden_dim),
         "attention_heads": int(config.attention_heads),
         "ppo_epochs": int(config.ppo_epochs),
         "actor_lr": float(config.actor_lr),
@@ -446,6 +534,7 @@ def train_vabl_vec(
         "best_reward": best_reward,
         "elapsed": elapsed,
         "config": cfg_record,
+        "gradient_decomp": grad_log,  # [] if disabled
     }
 
     if save_path:
@@ -484,10 +573,20 @@ if __name__ == "__main__":
                         help="Use a snapshot of the initial agent policy to generate aux targets; "
                              "keeps aux capacity + gradient pathway but removes co-learning "
                              "non-stationarity from targets (distinguishing experiment).")
+    parser.add_argument("--aux-noise-targets", action="store_true",
+                        help="Replace aux targets with uniform random integers (resampled each "
+                             "iteration). Tests whether aux CAPACITY or co-learning SIGNAL matters.")
+    parser.add_argument("--aux-hidden-dim", type=int, default=None,
+                        help="Override aux-MLP hidden dim (default 64). Used to scale aux capacity "
+                             "independently of target source, e.g. --aux-hidden-dim 16.")
+    parser.add_argument("--log-gradient-decomp", action="store_true",
+                        help="Log per-iteration policy/aux gradient norms + cosine (diagnostic).")
+    parser.add_argument("--grad-log-interval", type=int, default=25,
+                        help="If --log-gradient-decomp, log every N iterations.")
     args = parser.parse_args()
 
     # Build config from CLI knobs
-    base_config = VABLConfig()._replace(
+    cfg_kwargs = dict(
         use_attention=not args.no_attention,
         use_aux_loss=not args.no_aux_loss,
         aux_lambda=args.aux_lambda,
@@ -495,6 +594,9 @@ if __name__ == "__main__":
         aux_anneal_fraction=args.aux_anneal_fraction,
         separate_aux_encoder=args.separate_aux_encoder,
     )
+    if args.aux_hidden_dim is not None:
+        cfg_kwargs["aux_hidden_dim"] = int(args.aux_hidden_dim)
+    base_config = VABLConfig()._replace(**cfg_kwargs)
 
     train_vabl_vec(
         config=base_config,
@@ -502,4 +604,7 @@ if __name__ == "__main__":
         n_envs=args.n_envs, seed=args.seed, log_interval=args.log_interval,
         save_path=args.save,
         aux_frozen_target_policy=args.aux_frozen_target_policy,
+        aux_noise_targets=args.aux_noise_targets,
+        log_gradient_decomp=args.log_gradient_decomp,
+        grad_log_interval=args.grad_log_interval,
     )
