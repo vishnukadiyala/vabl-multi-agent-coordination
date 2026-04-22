@@ -104,13 +104,17 @@ meta-learned dynamic context.
 
 \textbf{Approach.} We construct \textbf{VABL}, a minimal architecture
 in this class (\S\ref{sec:background}), and run controlled ablations
-across four MARL environments plus a supervised control. The
-distinguishing experiment at the heart of this paper varies the source
-of the aux target while holding aux capacity, architecture, and the
-aux-to-encoder gradient pathway \emph{identical} to Full. Teammate
-co-learning targets are pathological; frozen initial-policy targets
-(stationary but structured) partially recover; uniform random targets
-(stationary and unstructured) fully recover the no-aux regime. The
+across four MARL environments plus a supervised control. We refer to
+the attention-plus-constant-aux configuration as \emph{Full} (the
+pathological baseline); No~Aux removes the aux loss; No~Attention
+replaces attention with mean pooling; Neither does both. The
+distinguishing experiment at the heart of the paper varies only the
+\emph{source} of the aux target (teammate co-learning, frozen
+initial-policy, or uniform random) while holding aux capacity,
+architecture, and the aux-to-encoder gradient pathway identical to
+Full. Teammate targets are pathological; frozen targets (stationary
+but structured) partially recover; random targets (stationary and
+unstructured) fully recover the no-aux regime. The
 capacity-consumption hypothesis predicts all three to be pathological
 and is ruled out. A complementary control sweeping aux-MLP capacity
 $8\times$ produces no detectable effect, reinforcing the conclusion.
@@ -118,14 +122,14 @@ $8\times$ produces no detectable effect, reinforcing the conclusion.
 \textbf{Unifying the multi-environment picture.} Across four
 cooperative MARL environments we observe the same mechanism with
 increasing amplitude as coordination difficulty grows: on Overcooked
-Asymmetric Advantages the pathology is an attention--aux interaction
-(only Full is harmed); on Cramped Room Full is most harmed with hints
-of aux-alone harm; on Hanabi 2-player the aux harms policy learning
-regardless of attention ($d=+2.81$ for No Aux vs Full). On the
-symmetric, slowly drifting MPE navigation task and on supervised
-CIFAR-100 the pathology is absent. This cross-environment gradient is
-consistent with Proposition~\ref{prop:variance}'s prediction that
-late-training variance scales with teammate-policy drift variance.
+Asymmetric Advantages the pathology is an attention-plus-aux
+interaction (only Full is harmed); on Cramped Room Full is most
+harmed with hints of aux-alone harm; on Hanabi 2-player the aux
+harms policy learning regardless of attention ($d=+2.81$ for No Aux
+vs Full). On the symmetric, slowly drifting MPE navigation task and
+on supervised CIFAR-100 the pathology is absent. This cross-environment
+gradient is consistent with Proposition~\ref{prop:variance}'s prediction
+that late-training variance scales with teammate-policy drift variance.
 
 \textbf{Contributions.} \textbf{(1)}~Identification and controlled
 isolation of a late-training instability in a minimal belief-learning
@@ -670,23 +674,26 @@ cross-seed std from $8.55$ to $2.13$, a $4\times$ reduction.
 
 \begin{table}[t]
 \centering
-\caption{Cross-environment generalization of the pathology. Effect size Cohen's $d$ for No Aux vs Full. Coordination-heavy cooperative settings (AA, Cramped, SMAX, Hanabi) all show the pathology; the symmetric MPE navigation task and supervised CIFAR-100 do not. $d$ grows with a coarse measure of coordination complexity (see text).}
+\caption{Cross-environment generalization. Cohen's $d$ is No Aux vs Full on each task. Four cooperative benchmarks show the pathology; MPE navigation and supervised CIFAR-100 do not. Effect size grows with teammate-policy drift (see text).}
 \label{tab:cross_env}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Environment} & \textbf{Type} & \textbf{Full Final50} & \textbf{No Aux Final50} & \textbf{$d$ (No Aux vs Full)} \\
+\textbf{Environment} & \textbf{Type} & \textbf{Full Final50} & \textbf{No Aux Final50} & \textbf{$d$} \\
 \midrule
-Hanabi (2p, turn-based)         & cooperative & $0.14 \pm 0.26$ & $\mathbf{2.81 \pm 1.32}$ & $\mathbf{+2.81}$ \\
-Overcooked Cramped Room         & cooperative & $409.70 \pm 1.41$ & $416.18 \pm 0.79$ & $+5.07$ \\
-Overcooked Asymm. Advantages    & cooperative & $463.21 \pm 9.55$ & $473.45 \pm 4.04$ & $+1.40$ \\
-SMAX 3v3                         & cooperative & $10.60 \pm 0.46$ & $11.15 \pm 0.41$ & $+1.26$ \\
+Overcooked Cramped Room      & cooperative & $409.70 \pm 1.41$ & $416.18 \pm 0.79$ & $\mathbf{+5.07}$ \\
+Hanabi (2p, turn-based)      & cooperative & $0.14 \pm 0.26$ & $2.81 \pm 1.32$ & $+2.81$ \\
+Overcooked Asymm. Advantages & cooperative & $463.21 \pm 9.55$ & $473.45 \pm 4.04$ & $+1.40$ \\
+SMAX 3v3                     & cooperative & $10.60 \pm 0.46$ & $11.15 \pm 0.41$ & $+1.26$ \\
 \midrule
-MPE simple\_spread               & cooperative & $-18.82 \pm 0.99$ & (No Attn $-18.59$) & no effect \\
-CIFAR-100 (supervised)           & supervised  & $43.90$ & $43.47$ & no effect \\
+MPE simple\_spread            & cooperative & $-18.82 \pm 0.99$ & $-18.77 \pm 1.02$ & $\sim 0$ \\
+CIFAR-100 (ViT)              & supervised  & $43.90$ & $43.47$ & $\sim 0$ \\
 \bottomrule
 \end{tabular}
+
+\vspace{2pt}
+{\footnotesize MPE No Aux values approximate (see Appendix~\ref{app:tables}); CIFAR-100 is a single-seed probe per cell (Appendix~\ref{app:vision}).}
 \end{table}
 
 Table~\ref{tab:cross_env} summarizes the cross-environment picture.
@@ -793,20 +800,24 @@ centralized critic; (4)~report at multiple training budgets.
 \label{sec:limitations}
 % ============================================================================
 
-All MARL experiments use 5 seeds: the pathology resolves at positive
-Cohen's $d$ in two of four attention-based actor configs in the
-architecture sweep (the other two have intrinsic cross-seed variance
-too high to resolve), the Neither-vs-Full AA CI crosses zero, and the
-$\lambda$ sweep has three values and shows a sweet spot but not the
-full shape. Sample-efficiency curves are AA-only; the CIFAR-100
-cross-domain probe is a single-seed pilot per configuration. Direct
-gradient decomposition on AERIAL and a separate-encoder VABL control
-are left to future work; our 5-seed AERIAL aggregate includes one
-non-converging seed (both 4- and 5-seed aggregates reported).
+\textbf{Statistical power.} All MARL experiments use 5 seeds. The
+architecture sweep resolves the pathology at positive Cohen's $d$ in
+two of four attention-based configs (the other two have cross-seed
+variance too high to resolve); the Neither-vs-Full AA CI crosses
+zero; the $\lambda$ sweep at three values shows a sweet spot but not
+the full shape. Sample-efficiency curves are AA-only. The CIFAR-100
+probe is a single-seed pilot per configuration.
+
+\textbf{Scope.} Direct gradient decomposition on AERIAL and a
+separate-encoder VABL control are future work. Our 5-seed AERIAL
+aggregate includes one non-converging seed; 4- and 5-seed aggregates
+both reported (Appendix~\ref{app:tables}). On Hanabi we use
+off-the-shelf hyperparameters so absolute scores are below published
+self-play optima; our claim concerns the relative $2{\times}2$ pattern.
 Proposition~\ref{prop:variance} uses linearized dynamics and i.i.d.\
 noise (synthetic verification in Appendix~\ref{app:synthetic}).
-Communication methods achieve $\sim$65\% higher reward on AA; our
-contribution is the pathology and its fixes, not state-of-the-art.
+Communication baselines achieve $\sim$65\% higher reward on AA; our
+contribution is the mechanism and its fixes, not state-of-the-art.
 
 
 % ============================================================================
@@ -814,24 +825,18 @@ contribution is the pathology and its fixes, not state-of-the-art.
 \label{sec:conclusion}
 % ============================================================================
 
-Attention-based belief encoders paired with constant-weight
-teammate-future-prediction aux (BEPAL~\cite{huang2025bepal}, Dynamic
-Belief~\cite{zhai2023dynamic}) exhibit a late-training instability in
-cooperative MARL. We identify the mechanism causally: a target-source
-distinguishing test and an $8{\times}$ aux-capacity sweep jointly
-rule out a generic capacity-consumption alternative, leaving
-structured, co-learning-non-stationary aux targets as the
-pathway-specific driver. Three gradient-targeted interventions
-($\lambda{\leq}0.01$ or annealing, stop-gradient on the belief,
-critic-side aux placement) recover the no-aux regime on Overcooked;
-on SMAX variance drops but a residual mean gap remains, with a
-non-monotonic $\lambda$ response that we flag as open. Cross-environment
-generalization across four cooperative MARL benchmarks shows an
-effect-size gradient aligned with coordination complexity (Hanabi and
-Cramped Room strongest, AA and SMAX moderate), and a null on
-symmetric MPE navigation and supervised CIFAR-100. As a secondary
-finding, the widely reported Overcooked coordination collapse is
-largely a training-budget artifact.
+A target-source distinguishing test and an $8{\times}$ aux-capacity
+sweep jointly rule out a capacity-consumption alternative, leaving
+structured co-learning-non-stationary aux targets as the
+pathway-specific driver of late-training instability in VABL
+(BEPAL~\cite{huang2025bepal} and Dynamic
+Belief~\cite{zhai2023dynamic} instantiate this pattern). Three
+gradient-pathway interventions recover the no-aux regime on Overcooked;
+on SMAX variance drops but a mean gap with non-monotonic $\lambda$
+response remains. Effect size scales with coordination complexity
+across four cooperative MARL benchmarks and is absent on symmetric
+MPE and CIFAR-100. The widely reported Overcooked collapse is largely
+a training-budget artifact.
 
 
 % ============================================================================
