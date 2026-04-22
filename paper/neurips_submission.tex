@@ -387,15 +387,16 @@ to Full but reduce target drift, and they recover the no-aux regime
 near-null effect ($<0.5$ points, Appendix~\ref{app:vision}), since
 supervised labels are perfectly stationary. Figure~\ref{fig:gradients}
 plots the empirical decomposition on Full VABL: cosine between the PPO
-and aux gradients oscillates symmetrically across both signs with
-$\mathrm{std}(\cos) = 0.179 \pm 0.014$ across 5 seeds in late training,
-while the magnitude ratio $\|g_{\mathrm{aux}}\|/\|g_{\pi}\| < 0.25$
-throughout training; a directional-not-magnitude signature.
+and aux gradients oscillates symmetrically across both signs
+(pooled-across-seeds mean $\approx 0$, $\mathrm{std}(\cos) = 0.185$ in
+late training, 5 seeds), while the aux-to-policy magnitude ratio mean
+stays below $0.25$ throughout training; a directional-not-magnitude
+signature.
 
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/neurips/f1_gradient_decomp_v2.pdf}
-\caption{Gradient decomposition for Full VABL on Overcooked AA (5 seeds). \textbf{(a)}~Per-seed cosine similarity between the PPO and auxiliary gradients oscillates across both signs throughout training; the bold black curve is the across-seed mean. \textbf{(b)}~Distribution of cosine values pooled across seeds over the late 50\% of training; approximately zero-mean with substantial spread, consistent with directional noise in the auxiliary-gradient drift. \textbf{(c)}~The aux-to-policy magnitude ratio stays bounded below $0.25$ across all seeds throughout training, supporting the directional-not-magnitude interpretation.}
+\caption{Gradient decomposition for Full VABL on Overcooked AA (5 seeds). \textbf{(a)}~Per-seed cosine similarity between the PPO and auxiliary gradients oscillates across both signs throughout training; across-seed mean in bold black. \textbf{(b)}~Cosine values pooled across seeds over the late 50\% of training: mean $\approx 0$, std $= 0.185$, range $[-0.33, +0.41]$. Symmetric spread consistent with directional noise in the aux-gradient drift. \textbf{(c)}~The aux-to-policy magnitude ratio mean stays bounded below $0.25$ across training (one seed touches $0.29$ briefly mid-training), supporting the directional-not-magnitude interpretation.}
 \label{fig:gradients}
 \end{figure}
 
@@ -448,18 +449,19 @@ hypothesis predicts recovery to varying degrees, depending on whether
 the residual structure is stationary (frozen) or absent (random).
 
 \subsection{Environments}
-We evaluate three environment families.
-\textbf{Overcooked}~\cite{carroll2019utility}: layouts \emph{Asymmetric
-Advantages} and \emph{Cramped Room}, 2 agents, horizon 400, 25{,}024
-episodes ($\approx$10M env steps), 64 vectorized envs via JAX
-\texttt{vmap}.
-\textbf{MPE simple\_spread}~\cite{lowe2017multi}: 3 symmetric
-agents, horizon 25, 100K episodes ($\approx$2.5M steps).
+We evaluate four MARL environments via
+JaxMARL~\cite{rutherford2024jaxmarl} and one supervised control.
+\textbf{Overcooked}~\cite{carroll2019utility}: \emph{Asymmetric
+Advantages} and \emph{Cramped Room}, 2 agents, horizon 400,
+25{,}024 episodes ($\approx$10M steps), 64 vectorized envs.
+\textbf{Hanabi 2-player}~\cite{bard2020hanabi}: turn-based partial-info
+card game, horizon 80, 25K episodes.
+\textbf{MPE simple\_spread}~\cite{lowe2017multi}: 3 symmetric agents,
+horizon 25, 100K episodes.
 \textbf{SMAX 3v3}~\cite{rutherford2024jaxmarl}: 3 allies vs.\ 3
-heuristic enemies, horizon 100, 50K episodes ($\approx$5M steps). SMAX
-covers both original SMAC~\cite{samvelyan2019starcraft} and SMAC
-v2~\cite{ellis2023smacv2} scenarios, testing a fundamentally different
-coordination domain (tactical combat vs.\ cooking/navigation).
+heuristic enemies, horizon 100, 50K episodes, covering both
+SMAC~\cite{samvelyan2019starcraft} and SMAC
+v2~\cite{ellis2023smacv2} scenarios (tactical combat).
 
 \subsection{Baselines}
 
