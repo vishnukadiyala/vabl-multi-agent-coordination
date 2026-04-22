@@ -332,10 +332,11 @@ steps: (i) define directional interference and distinguish it from
 magnitude interference; (ii) derive the aux-gradient noise covariance
 from teammate-policy drift; (iii) bound late-training parameter
 variance in terms of that covariance; (iv) state a threshold
-condition for instability onset. The model is descriptive (not a
-first-principles prediction of absolute performance), but it connects
-co-learning dynamics to observed instability without treating noise
-as exogenous.
+condition for instability onset. The model is a \emph{first-order
+mechanistic} derivation: it connects co-learning dynamics to observed
+instability through causally upstream quantities ($\Sigma_\pi$,
+$J_\pi$) rather than treating gradient noise as exogenous, using
+standard linearization steps we make explicit below.
 
 \paragraph{Step 1: defining directional interference.} Let
 $g_\pi(t) = \nabla_\theta L_{\mathrm{PPO}}(\theta_t)$ and
@@ -431,6 +432,19 @@ quadratic loss, linearized dynamics, i.i.d.\ noise, first-order
 expansion) in Appendix~\ref{app:proof} uses the Lyapunov equation
 $\Sigma_\delta = A \Sigma_\delta A^\top + \alpha^2 \Sigma_\varepsilon$
 with $A = I - \alpha H$ and substitutes Eq.~\eqref{eq:drift_to_noise}.
+
+\paragraph{Empirical proxy and derived algorithm.}
+The cosine temporal std in Figure~\ref{fig:gradients} is a
+finite-sample proxy for normalized $\mathrm{tr}(J_\pi \Sigma_\pi
+J_\pi^\top)$. Across our four logged conditions the proxy predicts
+the Final50 std ordering (Full: $0.18 \to 9.29$; No Aux / Stop-grad /
+Anneal: $0 \to 4.40/4.24/2.87$); within-Full per-seed correlation
+with peak-to-Final50 drop is $r=+0.40$ at $n{=}5$. The threshold
+condition suggests a concrete adaptive controller, \emph{drift-gated
+aux}: apply stop-gradient on the belief whenever a sliding-window
+estimate of the cosine std exceeds a calibrated $\tau$. This
+interpolates between the always-on and always-off limits we study
+here; empirical evaluation is future work.
 
 \begin{figure}[t]
 \centering
@@ -702,18 +716,14 @@ hypothesis on two independent axes.
 \subsection{Fix Paths, Given the Mechanism}
 \label{sec:fixes}
 
-With the mechanism identified, the three fix paths of
-Table~\ref{tab:ablation}~(Group~B) have a unified explanation: each
-severs the aux-to-encoder gradient pathway in a different way.
-$\lambda$-annealing zeroes the aux term's contribution over training;
-stop-gradient on the belief cuts it at its source; critic-side
-placement (architecture sweep, Appendix~\ref{app:arch_sweep}) routes
-it through the critic rather than the actor's encoder. All three land
-in Final50 $[471.60, 473.66]$, indistinguishable from No Aux by
-bootstrap CI (Appendix~\ref{app:tables}). Stop-gradient is the
-tightest of the three in that it modifies \emph{only} the gradient
-flow (not architecture, loss, forward pass, or reward), reducing the
-cross-seed std from $8.55$ to $2.13$, a $4\times$ reduction.
+Each of the three fix paths in Table~\ref{tab:ablation}~(Group~B)
+drives $J_\pi \to 0$ in the encoder subspace (Pathway-null
+prediction): $\lambda$-annealing decays the aux contribution,
+stop-gradient severs it at the belief, critic-side placement routes
+it away from the actor's encoder. All three land in Final50
+$[471.60, 473.66]$, indistinguishable from No Aux by bootstrap CI
+(Appendix~\ref{app:tables}); stop-gradient drops cross-seed std
+from $8.55$ to $2.13$ ($4\times$ reduction).
 
 \subsection{Cross-Environment Generalization}
 \label{sec:cross_env}
@@ -781,16 +791,13 @@ spot at $\lambda{=}0.01$ rather than a monotonic threshold, and at
 50M steps both $\lambda{=}0.01$ and $\lambda{=}0.05$ retain std $>7$,
 so the pathology is not a transient of the 10M budget.
 
-\subsection{Training-Budget Artifact (Secondary Finding)}
+\subsection{Training-budget artifact (secondary).}
 \label{sec:budget}
-
-A 6-method benchmark at 10M steps
-(Table~\ref{tab:benchmark}, Appendix~\ref{app:tables}) shows no method
-collapses at 10M, unlike reports at lower budgets. Coordination
-collapse on AA drops from $\sim$46\% at 500K to $<$3\% at 10M, and
-MAPPO, TarMAC, and CommNet all converge stably; the residual
-instability we isolate is distinct from and much smaller than the
-widely reported ``collapse''.
+A 6-method benchmark at 10M steps (Appendix~\ref{app:tables}) shows
+no method collapses at 10M; coordination collapse on AA drops from
+$\sim$46\% at 500K to $<$3\% at 10M. The residual instability we
+isolate is distinct from, and much smaller than, the widely reported
+collapse.
 
 
 % ============================================================================
@@ -816,10 +823,6 @@ interventions recover the no-aux regime without meta-learning.
 Contemporaneous~\cite{weng2026exploration} finds a distinct
 magnitude-driven pathology in parameter-shared DQN.
 
-\paragraph{Practical recommendations.}
-(1)~$\lambda{\leq}0.01$ or anneal $\lambda{\to}0$; (2)~stop-gradient
-on the belief; (3)~critic-side aux placement; (4)~report at multiple
-training budgets.
 
 
 % ============================================================================
@@ -827,22 +830,15 @@ training budgets.
 \label{sec:limitations}
 % ============================================================================
 
-\textbf{Statistical power.} All MARL experiments use 5 seeds; the
-architecture sweep resolves the pathology at positive Cohen's $d$ in
-2 of 4 attention-based configs (the other two have cross-seed
-variance too high to resolve), the Neither-vs-Full AA CI crosses
-zero, and the $\lambda$ sweep shows a sweet spot but not the full
-shape. Sample-efficiency curves are AA-only; CIFAR-100 is a
-single-seed pilot.
-
-\textbf{Scope.} Direct gradient decomposition on AERIAL and a
-separate-encoder VABL control are future work; our 5-seed AERIAL
-aggregate includes one non-converging seed. Hanabi uses off-the-shelf
-hyperparameters so absolute scores are low; our claim is the relative
-$2{\times}2$ pattern. Proposition~\ref{prop:variance} uses linearized
-dynamics and i.i.d.\ noise. Communication baselines achieve $\sim$65\%
-higher reward on AA; our contribution is the mechanism, not
-state-of-the-art.
+5 seeds throughout; 2 of 4 architecture-sweep attention configs
+resolve the pathology at positive Cohen's $d$, Neither-vs-Full AA
+CI crosses zero, the $\lambda$ sweep is 3 points, sample-efficiency
+is AA-only, CIFAR-100 is single-seed, and Hanabi uses off-the-shelf
+hyperparameters so absolute scores are low. AERIAL gradient
+decomposition and a separate-encoder VABL control are future work.
+Proposition~\ref{prop:variance} uses linearized dynamics, i.i.d.\
+noise, and a first-order expansion in $\pi_j$; $J_\pi$ is not
+closed-form for VABL.
 
 
 % ============================================================================
@@ -850,13 +846,11 @@ state-of-the-art.
 \label{sec:conclusion}
 % ============================================================================
 
-Structured non-stationary auxiliary targets inject directional noise
-that dominates policy gradients near convergence. Target-source and
+Structured non-stationary aux targets inject directional noise
+dominating policy gradients near convergence; target-source and
 capacity controls rule out alternatives; CIFAR-100 and MPE nulls are
-the principle's predicted boundary. Three gradient-pathway
-interventions recover stability; SMAX retains a non-monotonic
-$\lambda$ residual we flag as open. The widely reported Overcooked
-collapse is largely a training-budget artifact.
+the predicted boundary. Three gradient-pathway interventions recover
+stability on Overcooked.
 
 
 % ============================================================================
