@@ -423,13 +423,15 @@ displacement variance satisfies
 \end{equation}
 \end{proposition}
 
-Real $\varepsilon(t)$ is autocorrelated (consecutive teammate policies
-differ by one gradient step). A colored-noise treatment would
-multiply the right-hand side by an autocorrelation-time factor
-$\tau_c$ that is $O(1)$ when teammate updates are frequent relative to
-$1/\lambda_{\min}(H)$ and larger when they are slower, preserving the
-scaling with $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ and
-$\lambda_{\min}(H)$.
+We caution that the bound gives the scaling \emph{shape}, not
+absolute magnitude. Real $\varepsilon(t)$ is autocorrelated
+(consecutive teammate policies differ by one gradient step); a
+colored-noise treatment multiplies the right-hand side by an
+autocorrelation-time factor $\tau_c$. The scaling with
+$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ and $\lambda_{\min}(H)$ is
+preserved, but $\tau_c$ can be large for fast-learning teammates, so
+the bound may underestimate absolute variance in practice (see
+Scope paragraph).
 
 \paragraph{Step 4: threshold and testable predictions.}
 Displacement competes with the signal from policy-gradient progress.
@@ -511,6 +513,38 @@ $\hat s(t) > \tau \Rightarrow \mathtt{stop\_gradient}(b_t) $ before
 the aux head. This interpolates between always-on ($\tau {=} \infty$)
 and stop-gradient ($\tau {=} 0$) limits we study; evaluating it is
 future work.
+
+\paragraph{Scope and open questions.}
+We want to be explicit about what the first-order model predicts and
+what it does not. \textbf{(i)} The i.i.d.\ noise assumption gives the
+variance-scaling \emph{shape} but not absolute magnitude: real
+$\varepsilon(t)$ is correlated across iterations (consecutive
+teammate updates are one gradient step apart), and for fast-learning
+teammates the autocorrelation factor $\tau_c$ can be large, so the
+bound can underestimate the true variance substantially without
+changing its direction. \textbf{(ii)} The local-quadratic
+approximation is most accurate where teammate drift is smallest, so
+the theory's formal bounds apply most tightly in late training where
+the pathology is least severe, and apply less tightly mid-training
+where the worst cross-seed instability actually occurs. \textbf{(iii)}
+The proxy--variance ordering (Figure~\ref{fig:proxy}, $R^2 = 0.94$)
+is dominated by the categorical separation between Full (non-zero
+proxy) and the three pathway-zero conditions; the plot verifies
+ordering more than slope. \textbf{(iv)} The theory explains how
+severing $J_\pi$ in the encoder subspace eliminates encoder-side
+directional interference, but says nothing about what happens when
+$g_{\mathrm{aux}}$ is instead routed through the critic (the
+critic-side reversal we observe, $d = -0.79$, Appendix~\ref{app:arch_sweep},
+falls outside the scope of Proposition~\ref{prop:variance}).
+\textbf{(v)} The SMAX residual mean gap (variance recovers under fix
+paths, mean does not) is not consistent with a purely zero-mean
+directional-noise mechanism: symmetric oscillation should not bias
+the mean. Either a secondary pathology coexists in SMAX or the
+zero-mean assumption of $\varepsilon(t)$ is too strong there; we
+flag this as open. \textbf{(vi)} The monotonic-$\lambda$ prediction
+fails globally because aux-head representations co-adapt with
+$\lambda$, making $J_\pi$ itself $\lambda$-dependent; the first-order
+bound is local in $\lambda$.
 
 \begin{figure}[t]
 \centering
