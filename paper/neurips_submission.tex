@@ -60,8 +60,8 @@ learning under sparse rewards, from UNREAL~\cite{jaderberg2016reinforcement}
 and world models~\cite{hafner2023mastering} to self-predictive
 representations~\cite{schwarzer2021dataefficient} and cooperative MARL
 methods such as Dynamic Belief~\cite{zhai2023dynamic} and
-BEPAL~\cite{huang2025bepal}. We argue that a previously unstudied
-learning-dynamics principle governs when this pattern succeeds and
+BEPAL~\cite{huang2025bepal}. We argue that a previously uncharacterized
+learning-dynamics mechanism governs when this pattern succeeds and
 when it fails: \emph{auxiliary gradients carrying targets that are
 both structured (task-coupled) and non-stationary (drifting as other
 learners update) inject directional noise into the shared encoder
@@ -414,11 +414,16 @@ variance satisfies
 \end{proposition}
 
 \paragraph{Step 4: threshold and testable predictions.}
-Displacement competes with policy progress, so instability onset (in
-the sense of elevated cross-seed Final50 variance) corresponds to
-$\alpha^2 \mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)/\lambda_{\min}(H)
-\gtrsim C(\alpha, \eta)$, where $\eta$ is the per-iteration policy-
-gradient norm and $C$ the policy-signal scale. This yields three
+Displacement competes with policy progress, so instability onset
+corresponds to the condition
+\begin{equation}
+    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}
+    \;\gtrsim\;
+    C(\alpha, \eta),
+    \label{eq:threshold}
+\end{equation}
+where $\eta$ is the per-iteration policy-gradient norm and $C$ the
+policy-signal scale. This yields three
 testable predictions. \textbf{(a) Stationarity null}: $\Sigma_\pi
 \approx 0$ (supervised labels, symmetric slow drift) $\Rightarrow$
 no pathology. \textbf{(b) Pathway null}: interventions that drive
@@ -433,18 +438,36 @@ expansion) in Appendix~\ref{app:proof} uses the Lyapunov equation
 $\Sigma_\delta = A \Sigma_\delta A^\top + \alpha^2 \Sigma_\varepsilon$
 with $A = I - \alpha H$ and substitutes Eq.~\eqref{eq:drift_to_noise}.
 
-\paragraph{Empirical proxy and derived algorithm.}
-The cosine temporal std in Figure~\ref{fig:gradients} is a
-finite-sample proxy for normalized $\mathrm{tr}(J_\pi \Sigma_\pi
-J_\pi^\top)$. Across our four logged conditions the proxy predicts
-the Final50 std ordering (Full: $0.18 \to 9.29$; No Aux / Stop-grad /
-Anneal: $0 \to 4.40/4.24/2.87$); within-Full per-seed correlation
-with peak-to-Final50 drop is $r=+0.40$ at $n{=}5$. The threshold
-condition suggests a concrete adaptive controller, \emph{drift-gated
-aux}: apply stop-gradient on the belief whenever a sliding-window
-estimate of the cosine std exceeds a calibrated $\tau$. This
-interpolates between the always-on and always-off limits we study
-here; empirical evaluation is future work.
+\paragraph{Interpreting $J_\pi$.}
+$J_\pi$ is the sensitivity of the cross-entropy aux gradient to the
+teammate action distribution, evaluated around the time-averaged
+teammate policy. In VABL its column-space coincides with the
+pathway through attention/GRU/$\phi_\theta$ by which teammate
+one-hot inputs influence the aux head's predictions: large when
+the aux head is tightly tuned to the current teammate (steep
+cross-entropy landscape around $\bar\pi_j$), small when the encoder
+is structurally insensitive (mean pooling collapses heterogeneous
+teammates; stop-gradient cuts the encoder-side coupling; critic-side
+placement routes $g_{\mathrm{aux}}$ away from the actor encoder
+entirely). The cosine temporal std in Figure~\ref{fig:gradients} is
+a finite-sample proxy for $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$
+normalized by gradient magnitudes. Figure~\ref{fig:proxy} plots
+this proxy against Final50 cross-seed std across our four logged
+conditions: the proxy predicts the observed variance ordering
+(linear $R^2 = 0.94$ across conditions; three of four conditions
+have proxy zero by pathway construction, so this is an ordering
+check more than a slope estimate). Within Full's 5 seeds, per-seed
+cosine std correlates positively with per-seed peak-to-Final50 drop
+($r = +0.40$; weak at $n{=}5$).
+
+\paragraph{Drift-gated aux.}
+Eq.~\eqref{eq:threshold} yields an online controller: maintain a
+sliding-window estimate $\hat s(t)$ of $\cos(g_\pi, g_{\mathrm{aux}})$
+std, and gate the aux-to-encoder pathway on the rule
+$\hat s(t) > \tau \Rightarrow \mathtt{stop\_gradient}(b_t) $ before
+the aux head. This interpolates between always-on ($\tau {=} \infty$)
+and stop-gradient ($\tau {=} 0$) limits we study; evaluating it is
+future work.
 
 \begin{figure}[t]
 \centering
@@ -774,10 +797,9 @@ this scaling: late-training variance grows with the temporal variance
 of the aux-gradient direction, which in turn grows with teammate
 co-learning drift.
 
-On SMAX, fix paths reduce cross-seed std from $0.46$ to $0.22$--$0.29$
-but do not recover the mean ($10.54$--$10.63$ vs No Aux $11.15$); a
-direct test halving $\lambda$ to $0.025$ worsens rather than improves
-SMAX ($10.18 \pm 0.35$), a non-monotonic response we flag as open.
+On SMAX, fix paths reduce cross-seed std but not the mean; halving
+$\lambda$ worsens Final50 ($10.18 \pm 0.35$ vs $10.60$ at $\lambda{=}0.05$),
+a non-monotonic response we flag as open (Appendix~\ref{app:tables}).
 
 \subsection{Architecture and $\lambda$ Generalization}
 \label{sec:arch_sweep}
@@ -815,12 +837,11 @@ large, with Hanabi losing AA's clean $2{\times}2$ interaction because
 partial information makes even mean-pool aux disruptive.
 
 \paragraph{Relation to prior work.}
-BEPAL~\cite{huang2025bepal}'s oracle (stationary) targets are
-consistent with our principle. Dynamic Belief~\cite{zhai2023dynamic}
-reports the same failure mode and fixes it via meta-learned dynamic
-context; we identify the mechanism and show three gradient-pathway
-interventions recover the no-aux regime without meta-learning.
-Contemporaneous~\cite{weng2026exploration} finds a distinct
+BEPAL's oracle (stationary) targets are consistent with the principle;
+Dynamic Belief reports the same failure and fixes it via meta-learned
+dynamic context, while we identify the mechanism and show
+pathway-severing interventions work without meta-learning.
+Contemporaneous~\cite{weng2026exploration} identifies a distinct
 magnitude-driven pathology in parameter-shared DQN.
 
 
@@ -830,15 +851,23 @@ magnitude-driven pathology in parameter-shared DQN.
 \label{sec:limitations}
 % ============================================================================
 
-5 seeds throughout; 2 of 4 architecture-sweep attention configs
-resolve the pathology at positive Cohen's $d$, Neither-vs-Full AA
-CI crosses zero, the $\lambda$ sweep is 3 points, sample-efficiency
-is AA-only, CIFAR-100 is single-seed, and Hanabi uses off-the-shelf
-hyperparameters so absolute scores are low. AERIAL gradient
-decomposition and a separate-encoder VABL control are future work.
-Proposition~\ref{prop:variance} uses linearized dynamics, i.i.d.\
-noise, and a first-order expansion in $\pi_j$; $J_\pi$ is not
-closed-form for VABL.
+\textbf{Scope and assumptions.} The mechanism applies where auxiliary
+targets are both task-coupled and co-adaptive; stationary targets
+(CIFAR-100) and slow symmetric drift (MPE) fall outside scope and
+show no effect, as predicted. The analysis uses local linearization
+(quadratic loss, i.i.d.\ noise, first-order expansion in $\pi_j$),
+standard for first-order mechanistic models; $J_\pi$ and $\Sigma_\pi$
+are not directly observed, but the normalized cosine temporal std
+proxies $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$
+(Figure~\ref{fig:proxy}, Appendix~\ref{app:proxy}).
+
+\textbf{Empirical scale and future work.} 5 seeds per condition.
+Architecture sweep resolves at positive $d$ in 2 of 4 attention
+configs; Neither-vs-Full AA CI crosses zero; $\lambda$ sweep is 3
+points; sample-efficiency AA-only; CIFAR-100 single-seed; Hanabi
+absolute scores low. Drift-gated aux
+(\S\ref{sec:theory}), AERIAL gradient decomposition, and a
+separate-encoder VABL control are future work.
 
 
 % ============================================================================
@@ -1228,6 +1257,17 @@ Hanabi    & No Aux & 3.64   & 0.80   & 3.34   & 4.06   & 2.20   & 2.81   & $+2.8
 \bottomrule
 \end{tabular}
 \end{table}
+
+
+\section{Proxy--Variance Plot}
+\label{app:proxy}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.65\textwidth]{figures/neurips/f_proxy_variance.pdf}
+\caption{Cosine temporal std (proxy for $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ normalized by gradient magnitudes) vs Final50 cross-seed std across four logged conditions on Overcooked AA. Three zero-proxy conditions reach zero by pathway construction; Full is the only condition with non-zero proxy and has elevated variance. Linear $R^2 = 0.94$ across conditions; the ordering is the main prediction, not the slope.}
+\label{fig:proxy}
+\end{figure}
 
 
 \section{Synthetic Verification of Proposition~\ref{prop:variance}}
