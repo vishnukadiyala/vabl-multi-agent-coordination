@@ -34,8 +34,8 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{Constant Auxiliary Losses Considered Harmful:\\
-A Cautionary Tale in Belief-Learning Multi-Agent Reinforcement Learning}
+\title{When Auxiliary Losses Harm Belief Learning:\\
+A Causal Characterization in Cooperative Multi-Agent RL}
 
 % Author block hidden for anonymous review.
 % \author{
@@ -55,31 +55,33 @@ A Cautionary Tale in Belief-Learning Multi-Agent Reinforcement Learning}
 \maketitle
 
 \begin{abstract}
-Attention-based belief encoders trained with constant-weight auxiliary
-prediction losses targeting teammate future behavior appear in recent
-cooperative multi-agent reinforcement learning (MARL) methods such as
-BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}.
-We identify a directional gradient-interference pathology in this
-design pattern under co-learning non-stationarity, building on Zhai
-et al.'s independent observation that naively co-trained
-teammate-action prediction can hurt decentralized policy learning. To
-isolate the mechanism we construct VABL as a minimal architecture in
-the same class and ablate it across Overcooked, SMAX, and MPE. The
-pathology appears only when attention and constant-weight aux
-co-occur, is environment-dependent (present on coordination-heavy
-Overcooked and SMAX, absent on simpler MPE navigation), and is
-driven by a small but directionally noisy auxiliary gradient rather
-than magnitude dominance. Three gradient-targeted interventions
-(annealing, stop-gradient on the belief, critic-side aux placement)
-converge to the no-aux regime on Overcooked; on SMAX they reduce
-cross-seed variance but leave a residual mean gap, which we flag as
-an open question. A follow-up architecture sweep shows the effect
-replicates across two learned-attention variants beyond the main
-configuration, mean pooling is immune, and critic-side placement
-reverses the sign. We additionally
-show that the widely reported ``coordination collapse'' on Overcooked
-is largely a training-budget artifact. Code, training logs, and
-per-seed results for all 350{+} runs are at
+Attention-based belief encoders are often paired with an auxiliary
+loss that predicts teammates' future actions, a design appearing in
+recent cooperative multi-agent reinforcement learning (MARL) methods
+including Dynamic Belief~\cite{zhai2023dynamic} and
+BEPAL~\cite{huang2025bepal}. We identify a late-training instability
+in this pairing and trace it to a specific property of the auxiliary
+target: when the target is both \emph{structured} (teammate-coupled,
+carrying a co-learning signal) and \emph{non-stationary} (drifting as
+teammates learn), routing the aux gradient through a shared actor
+encoder under attention degrades final-50-episode reward with elevated
+cross-seed variance. To isolate the mechanism we construct VABL as a
+minimal architecture in this class and run a target-source
+distinguishing test that holds aux capacity, architecture, and the
+aux-to-encoder gradient pathway fixed: teammate-coupled co-learning
+targets (the pathological baseline) are harmful; frozen-initial-policy
+targets (stationary but structured) partially recover stability;
+uniform random targets (stationary and unstructured) fully recover the
+no-aux regime. This rules out a generic aux-capacity-consumption
+alternative and identifies target structure and non-stationarity, not
+the presence of an aux pathway, as the pathway-specific driver. Three
+gradient-targeted interventions ($\lambda$-annealing, stop-gradient on
+the belief, critic-side aux placement) converge to the no-aux regime
+on Overcooked; on SMAX they reduce cross-seed variance but a mean gap
+remains, and a direct $\lambda$ sweep shows the relationship is
+non-monotonic in $\lambda$. A CIFAR-100 probe finds no effect in
+supervised learning, narrowing the effect to co-learning settings.
+Code, training logs, and per-seed results for all 375{+} runs are at
 \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
 \end{abstract}
 
@@ -89,66 +91,67 @@ per-seed results for all 350{+} runs are at
 \label{sec:intro}
 % ============================================================================
 
-Cooperative MARL on Overcooked is widely reported to collapse after
-reaching strong peak reward during training: severe late-training
-degradation for MAPPO~\cite{yu2022surprising} and
-AERIAL~\cite{phan2023attention}, with communication-based methods
-showing similar instability~\cite{das2019tarmac, sukhbaatar2016commnet}.
-These reports have motivated auxiliary prediction
-losses~\cite{jaderberg2016reinforcement}, attention-based belief
-encoders~\cite{phan2023attention}, and explicit communication channels
-as stabilization mechanisms. The resulting design pattern, a shared
-encoder trained jointly with a policy loss and a constant-weight
-auxiliary prediction loss, is now widespread beyond MARL, appearing
-in world models~\cite{hafner2023mastering}, multi-task
-RL~\cite{jaderberg2016reinforcement}, and self-supervised
-representation learning~\cite{schwarzer2021dataefficient}. We find
-most of the reported Overcooked collapse to be a training-budget
-artifact: coordination collapse, defined as
-$(\mathrm{Best}{-}\mathrm{Final50})/\mathrm{Best}$, drops from
-$\sim$46\% at 500K to $<$3\% at 10M, and MAPPO, TarMAC, and CommNet all
-converge stably by 10M (Section~\ref{sec:budget}).
+Cooperative MARL agents frequently learn latent beliefs about
+teammates via recurrent encoders trained under a policy-gradient loss.
+A common augmentation pairs this belief encoder with a constant-weight
+auxiliary loss predicting each teammate's next action, intended to
+give the encoder supervised structure even when rewards are sparse.
+Dynamic Belief~\cite{zhai2023dynamic} and BEPAL~\cite{huang2025bepal}
+are two recent instances. Zhai et al.'s Static-Belief ablation
+independently reports that naively co-trained teammate-action
+prediction drops Traffic Junction success from $73.4\%$ (baseline) to
+$71.9\%$; they attribute the gap to teammate non-stationarity and
+resolve it via meta-learned dynamic context. We provide a causal
+characterization of this failure mode in a minimal setting.
 
-\textbf{The design pattern and isolating its mechanism.}
-BEPAL~\cite{huang2025bepal} and Dynamic Belief~\cite{zhai2023dynamic}
-combine attention-based belief encoders with constant-weight
-teammate-future-prediction aux; Dynamic Belief's Static-Belief
-ablation independently reports that naive co-training drops success
-below no-aux, attributed to teammate non-stationarity. We construct
-\textbf{VABL}, a minimal architecture in this design-pattern class
-with a cleanly separable aux pathway. In our 7-config ablation on
-Overcooked AA at 10M, the attention + constant-aux cell is the only
-one with late-training instability while every configuration reaches
-comparable Best ($482$--$485$, spread $\sim$2 points). The pathology reproduces on Cramped Room and
-SMAX but is absent on MPE simple\_spread, consistent with
-Proposition~\ref{prop:variance}'s environment-dependent threshold.
-Three gradient-targeted interventions ($\lambda$-annealing,
-stop-gradient on the belief into the aux head, and both combined)
-converge to a recovered regime statistically equivalent to removing
-aux. A CIFAR-100 cross-domain test finds the pathology absent in
-supervised learning, narrowing it to MARL co-learning non-stationarity.
+\textbf{VABL and the observed instability.} We construct
+\textbf{VABL}, a minimal architecture in this class, comprising a
+recurrent belief encoder with multi-head attention over teammate
+action embeddings, trained with PPO plus a constant-weight
+next-teammate-action auxiliary loss ($\lambda{=}0.05$). In our
+$2{\times}2$ ablation on Overcooked AA at 10M env steps, the attention
+$+$ aux cell is the only one with late-training instability, while
+every configuration reaches comparable Best reward
+($482$--$485$, spread $\sim$2 points). The effect reproduces on Overcooked
+Cramped Room and SMAX 3v3 but is absent on MPE simple\_spread and on
+supervised CIFAR-100.
 
-Our contributions: \textbf{(1)}~a directional
-gradient-interference pathology in the attention + constant-aux
-design pattern, isolated under controlled ablation in VABL, with
-environment-dependence (present on Overcooked and SMAX, absent on MPE);
-\textbf{(2)}~a descriptive stochastic model
-(Proposition~\ref{prop:variance}, bound scaling with
-$\mathrm{tr}(\Sigma_\varepsilon)/\lambda_{\min}(H)$, where
-$\Sigma_\varepsilon$ is the covariance of the auxiliary-gradient
-noise) and gradient decomposition showing the mechanism is directional,
-not magnitude-driven; \textbf{(3)}~three gradient-targeted fix paths
-($\lambda{\leq}0.01$ or annealing, stop-gradient on the belief, or
-critic-side auxiliary placement) that all sever the aux-to-encoder
-pathway and recover to the no-aux regime on Overcooked (on SMAX they
-reduce variance but leave a residual mean gap; see \S\ref{sec:budget}),
-replicated across two learned-attention variants beyond the main
-configuration in a 60-run architecture sweep
-(Table~\ref{tab:arch_sweep}); \textbf{(4)}~evidence that the
-much-reported Overcooked coordination collapse is largely a
-training-budget artifact, plus a reproducible 350{+}-run, 5-seed
-benchmark with anonymized code at
-\url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
+\textbf{Isolating the mechanism.} We run a target-source
+distinguishing test that holds aux capacity, architecture, and the
+aux-to-encoder gradient pathway fixed, and varies only the
+\emph{source} of the aux target. (i) Teammate-coupled co-learning
+targets (the pathological baseline). (ii) Frozen-initial-policy
+targets (stationary but structured): Final50 $=470.2 \pm 4.5$, partial
+recovery — variance collapses from $8.55$ to $4.5$, mean partially
+recovers. (iii) Uniform random targets (stationary and unstructured):
+Final50 $=473.6 \pm 1.9$, full recovery, statistically
+indistinguishable from removing the aux loss entirely. The
+capacity-consumption hypothesis predicts all three to be pathological
+and is thus ruled out. Target structure \emph{and} non-stationarity
+are jointly identified as the pathway-specific driver. Three
+gradient-targeted interventions ($\lambda$-annealing, stop-gradient on
+the belief, critic-side aux placement) all recover the no-aux regime
+on Overcooked; on SMAX they reduce variance but a residual mean gap
+remains, and a direct $\lambda$ sweep ($\lambda{=}0.025$) does not
+improve SMAX performance, indicating non-monotonicity.
+
+\textbf{Contributions.} \textbf{(1)}~A late-training instability
+identified and isolated in a minimal belief-learning MARL
+architecture, with multi-environment evidence (present on Overcooked
+Asymmetric Advantages and Cramped Room + SMAX 3v3; absent on MPE
+simple\_spread and CIFAR-100). \textbf{(2)}~A target-source
+distinguishing experiment that rules out a generic
+aux-capacity-consumption alternative and identifies structured,
+non-stationary aux targets as the pathway-specific driver.
+\textbf{(3)}~Three gradient-pathway interventions that recover the
+no-aux regime on Overcooked, with honest characterization of a
+residual SMAX mean gap that is non-monotonic in $\lambda$.
+\textbf{(4)}~A reproducible 375{+}-run, 5-seed benchmark with
+anonymized code at
+\url{https://anonymous.4open.science/r/aux-loss-considered-harmful};
+as a secondary finding (\S\ref{sec:budget}), we observe that much of
+the reported Overcooked coordination collapse is a training-budget
+artifact.
 
 
 % ============================================================================
@@ -453,6 +456,37 @@ over the first 50\% of training), \textbf{Stop-gradient}
 (\texttt{stop\_gradient} on $b_t^i$ before the aux head; aux MLP
 still trains but gradients do not reach the encoder), and
 \textbf{Anneal + stop-gradient} (both combined).
+
+\subsection{Target-Source Distinguishing Test}
+\label{sec:method_distinguishing}
+
+To distinguish a directional-interference mechanism driven by
+structured, non-stationary aux targets from a generic
+aux-capacity-consumption alternative, we run Full VABL with the aux
+targets replaced by two alternative sources that preserve the aux
+network, its capacity, and the aux-to-encoder gradient pathway
+identically to Full:
+
+\begin{itemize}
+\item \textbf{Frozen-policy targets.} At iteration~0 we snapshot the
+initial (random-init) agent parameters as $\theta_0$ and freeze them.
+At each subsequent iteration, the aux target for step $t{+}1$ is the
+argmax action of $\pi_{\theta_0}$ applied to the rollout observation,
+rather than the actual teammate action. Targets are \emph{stationary}
+(no drift with teammate co-learning) but remain \emph{structured}
+(they come from a real policy).
+\item \textbf{Uniform random targets.} The aux target for step $t{+}1$
+is an integer drawn uniformly at random from $\{0,\dots,|\mathcal{A}|{-}1\}$,
+resampled each iteration. Targets are \emph{stationary in expectation}
+and \emph{unstructured} (no co-learning signal, no semantic coupling
+to teammates).
+\end{itemize}
+Both interventions leave aux capacity, architecture, gradient
+pathway, and loss form identical to Full; they vary \emph{only} the
+source and structure of the target. The capacity-consumption
+hypothesis predicts both to be pathological. The directional-interference
+hypothesis predicts recovery to varying degrees, depending on whether
+the residual structure is stationary (frozen) or absent (random).
 
 \subsection{Environments}
 We evaluate three environment families.
