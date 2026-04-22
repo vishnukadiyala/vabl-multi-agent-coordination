@@ -96,10 +96,11 @@ A common augmentation pairs this belief encoder with a constant-weight
 auxiliary loss that predicts each teammate's next action, intended to
 give the encoder supervised structure even when rewards are sparse.
 Dynamic Belief~\cite{zhai2023dynamic} and BEPAL~\cite{huang2025bepal}
-are two recent instances. Zhai et al.'s Static-Belief ablation
-independently reports that naively co-trained teammate-action
-prediction drops Traffic Junction success from $73.4\%$ to $71.9\%$;
-they attribute the gap to teammate non-stationarity and resolve it via
+are two recent instances. Zhai et al.~\cite{zhai2023dynamic}'s
+Static-Belief ablation independently reports that naively co-trained
+teammate-action prediction drops Traffic Junction success from
+$73.4\%$ to $71.9\%$; they attribute the gap to teammate
+non-stationarity and resolve it via
 meta-learned dynamic context.
 
 \textbf{Approach.} We construct \textbf{VABL}, a minimal architecture
@@ -173,10 +174,10 @@ XP-MARL~\cite{xu2024xpmarl} prioritizes training samples for
 non-stationarity; BEPAL~\cite{huang2025bepal} and Dynamic
 Belief~\cite{zhai2023dynamic} directly instantiate the design pattern
 we study (attention-based belief encoder $+$ fixed-weight
-teammate-future-prediction aux). Zhai et al.'s Static-Belief ablation
-(their Table~2) independently reports that naively co-trained
-teammate-action prediction drops Traffic Junction success from
-$73.4\%$ to $71.9\%$; their fix is a meta-learned dynamic context.
+teammate-future-prediction aux). Zhai et al.~\cite{zhai2023dynamic}'s
+Static-Belief ablation (their Table~2) reports that naive co-training
+drops Traffic Junction success from $73.4\%$ to $71.9\%$; their fix
+is a meta-learned dynamic context.
 
 \paragraph{Attention and stop-gradient.}
 AERIAL~\cite{phan2023attention} uses QMIX-based attention over
@@ -467,16 +468,21 @@ v2~\cite{ellis2023smacv2} scenarios (tactical combat).
 
 We compare against four methods spanning three paradigms:
 \textbf{MAPPO}~\cite{yu2022surprising} (decentralized policy gradient),
-\textbf{TarMAC}~\cite{das2019tarmac} (targeted explicit communication),
-\textbf{CommNet}~\cite{sukhbaatar2016commnet} (broadcast communication), and
-\textbf{AERIAL}~\cite{phan2023attention} (attention over teammate hidden
-states). All baselines are reimplemented in JAX~\cite{bradbury2018jax}
-using the JaxMARL framework~\cite{rutherford2024jaxmarl} and trained
-with the same hyperparameters, vectorized environment wrapper, and
-evaluation protocol. Our AERIAL port is an actor-critic variant using
-the original's attention-over-teammate-hiddens module within a PPO
-learner, for comparability with the other actor-critic baselines;
-Phan et al.'s original is QMIX-based.
+\textbf{TarMAC}~\cite{das2019tarmac} (targeted communication),
+\textbf{CommNet}~\cite{sukhbaatar2016commnet} (broadcast communication),
+and \textbf{AERIAL}~\cite{phan2023attention} (attention over teammate
+hidden states; our port uses PPO for comparability, the original is
+QMIX-based). All are reimplemented in JAX~\cite{bradbury2018jax} using
+JaxMARL~\cite{rutherford2024jaxmarl} with matched hyperparameters,
+env wrapper, and evaluation protocol. These baselines support the
+training-budget-artifact claim (\S\ref{sec:budget}): none exhibits our
+attention + teammate-prediction-aux design pattern, so they are not
+controls for the core mechanism. Direct re-implementation of Dynamic
+Belief~\cite{zhai2023dynamic} or BEPAL~\cite{huang2025bepal}, which do
+instantiate the pattern, would be a stronger external comparison and
+is left to future work; we rely instead on Zhai et al.'s
+independently-reported Static-Belief failure mode as external
+corroboration (\S\ref{sec:related}).
 
 \subsection{Cross-Domain Test}
 
