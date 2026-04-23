@@ -34,8 +34,13 @@ OUT_PDF = ROOT / "paper" / "figures" / "neurips" / "f1_gradient_decomp_v2.pdf"
 OUT_PDF.parent.mkdir(parents=True, exist_ok=True)
 
 FN_RE = re.compile(r"expB_(\w+?)_seed(\d+)\.json$")
-SEED_COLORS = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd"]
+# IBM colorblind-safe palette (matches the accessibility claim in Appendix K).
+# Magenta reserved for Full VABL in other figures; seeds use the other five.
+SEED_COLORS = ["#648FFF", "#785EF0", "#FE6100", "#FFB000", "#009E73"]
+SEED_LINESTYLES = ["-", "--", "-.", ":", (0, (3, 1, 1, 1))]
+SEED_MARKERS = ["o", "s", "D", "^", "v"]
 MEAN_COLOR = "#000000"
+FULL_MAGENTA = "#DC267F"
 
 
 def load_full_seeds():
@@ -64,13 +69,15 @@ def interp_series(iters_target, entries, key):
 def plot(seeds_data, save_to):
     mpl.rcParams.update({
         "font.family": "serif",
-        "font.size": 10,
-        "axes.labelsize": 10,
-        "axes.titlesize": 10,
-        "legend.fontsize": 9,
+        "font.size": 13,
+        "axes.labelsize": 14,
+        "axes.titlesize": 14,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "legend.fontsize": 11,
     })
 
-    fig, axes = plt.subplots(1, 3, figsize=(13, 3.4))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
 
     # Common grid: widest iteration range available
     iters = sorted(set().union(*[
@@ -80,22 +87,31 @@ def plot(seeds_data, save_to):
 
     seeds = sorted(seeds_data.keys())
 
+    # Place markers every ~7 points so lines stay readable.
+    marker_every = max(1, len(ref_iters) // 7)
+
     # ---------- Panel (a): per-seed cosine trajectories ----------
     ax = axes[0]
     cos_matrix = []
     for i, s in enumerate(seeds):
         y = interp_series(ref_iters, seeds_data[s], "cosine")
         cos_matrix.append(y)
-        ax.plot(ref_iters, y, color=SEED_COLORS[i % len(SEED_COLORS)],
-                linewidth=1.1, alpha=0.55, label=f"seed {s}")
+        ax.plot(
+            ref_iters, y,
+            color=SEED_COLORS[i % len(SEED_COLORS)],
+            linestyle=SEED_LINESTYLES[i % len(SEED_LINESTYLES)],
+            marker=SEED_MARKERS[i % len(SEED_MARKERS)],
+            markersize=6, markevery=marker_every,
+            linewidth=1.6, alpha=0.85, label=f"seed {s}",
+        )
     cos_arr = np.array(cos_matrix)
     ax.plot(ref_iters, cos_arr.mean(axis=0), color=MEAN_COLOR,
-            linewidth=2.0, label="mean")
-    ax.axhline(0, color="gray", linestyle="--", linewidth=0.8, alpha=0.5)
+            linewidth=2.6, linestyle="-", label="mean")
+    ax.axhline(0, color="gray", linestyle=":", linewidth=1.0, alpha=0.7)
     ax.set_xlabel("Training iteration")
     ax.set_ylabel(r"$\cos(g_{\pi}, g_{\mathrm{aux}})$")
     ax.set_title("(a) Full VABL cosine, per-seed")
-    ax.legend(loc="best", frameon=True, fontsize=8, ncol=2)
+    ax.legend(loc="best", frameon=True, ncol=2)
     ax.grid(True, alpha=0.3)
 
     # ---------- Panel (b): cosine distribution (late 50%) pooled ----------
@@ -106,19 +122,22 @@ def plot(seeds_data, save_to):
         k = len(cosines) // 2
         late_cos.extend(cosines[k:])
     late_cos = np.array(late_cos)
-    ax.hist(late_cos, bins=18, color="#E41A1C", edgecolor="black", alpha=0.75)
-    ax.axvline(0, color="gray", linestyle="--", linewidth=0.8, alpha=0.7)
-    ax.axvline(late_cos.mean(), color=MEAN_COLOR, linewidth=2.0,
+    ax.hist(
+        late_cos, bins=18,
+        color=FULL_MAGENTA, edgecolor="black",
+        hatch="//", alpha=0.8, linewidth=0.9,
+    )
+    ax.axvline(0, color="gray", linestyle=":", linewidth=1.0, alpha=0.8)
+    ax.axvline(late_cos.mean(), color=MEAN_COLOR, linewidth=2.4, linestyle="-",
                label=fr"mean = {late_cos.mean():+.3f}")
     ax.set_xlabel(r"$\cos(g_{\pi}, g_{\mathrm{aux}})$")
     ax.set_ylabel("Count (iterations x seeds)")
-    ax.set_title("(b) Cosine distribution, late 50% of training")
-    ax.legend(loc="best", frameon=True, fontsize=8)
+    ax.set_title("(b) Cosine distribution, late 50%")
+    ax.legend(loc="best", frameon=True)
     ax.grid(True, alpha=0.3)
-    # Annotate std
     std_txt = fr"std = {late_cos.std(ddof=1):.3f}"
     ax.text(0.02, 0.97, std_txt, transform=ax.transAxes, va="top", ha="left",
-            fontsize=9, bbox=dict(facecolor="white", edgecolor="gray", alpha=0.8))
+            fontsize=12, bbox=dict(facecolor="white", edgecolor="gray", alpha=0.85))
 
     # ---------- Panel (c): magnitude ratio (all 5 seeds) ----------
     ax = axes[2]
@@ -128,15 +147,22 @@ def plot(seeds_data, save_to):
         ratio = [e["norm_aux"] / (e["norm_policy"] + 1e-12) for e in seeds_data[s]]
         ratio_y = np.interp(ref_iters, itr, ratio)
         ratio_matrix.append(ratio_y)
-        ax.plot(ref_iters, ratio_y, color=SEED_COLORS[i % len(SEED_COLORS)],
-                linewidth=1.1, alpha=0.55, label=f"seed {s}")
+        ax.plot(
+            ref_iters, ratio_y,
+            color=SEED_COLORS[i % len(SEED_COLORS)],
+            linestyle=SEED_LINESTYLES[i % len(SEED_LINESTYLES)],
+            marker=SEED_MARKERS[i % len(SEED_MARKERS)],
+            markersize=6, markevery=marker_every,
+            linewidth=1.6, alpha=0.85, label=f"seed {s}",
+        )
     r_arr = np.array(ratio_matrix)
-    ax.plot(ref_iters, r_arr.mean(axis=0), color=MEAN_COLOR, linewidth=2.0, label="mean")
-    ax.axhline(0.25, color="black", linestyle="--", linewidth=0.8, alpha=0.7, label="0.25")
+    ax.plot(ref_iters, r_arr.mean(axis=0), color=MEAN_COLOR,
+            linewidth=2.6, linestyle="-", label="mean")
+    ax.axhline(0.25, color="black", linestyle="--", linewidth=1.2, alpha=0.8, label="0.25")
     ax.set_xlabel("Training iteration")
     ax.set_ylabel(r"$|g_{\mathrm{aux}}| / |g_{\pi}|$")
     ax.set_title("(c) Magnitude ratio")
-    ax.legend(loc="best", frameon=True, fontsize=8, ncol=2)
+    ax.legend(loc="best", frameon=True, ncol=2)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0, max(0.35, r_arr.max() * 1.1))
 
