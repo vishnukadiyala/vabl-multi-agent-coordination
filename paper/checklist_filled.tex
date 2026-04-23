@@ -1,0 +1,185 @@
+\section*{NeurIPS Paper Checklist}
+
+\begin{enumerate}
+
+\item {\bf Claims}
+    \item[] Question: Do the main claims made in the abstract and introduction accurately reflect the paper's contributions and scope?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The abstract and \S\ref{sec:intro} claim a learning-dynamics principle (structured non-stationary aux targets $\Rightarrow$ directional gradient noise) and enumerate six contributions. \S\ref{sec:theory} formalizes the principle and \S\ref{sec:results} tests it; predicted nulls (CIFAR-100, MPE) and target-source ordering are confirmed, and the Limitations section (\S\ref{sec:limitations}) flags the critic-side reversal and SMAX residual mean gap as open.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the abstract and introduction do not include the claims made in the paper.
+        \item The abstract and/or introduction should clearly state the claims made, including the contributions made in the paper and important assumptions and limitations. A \answerNo{} or \answerNA{} answer to this question will not be perceived well by the reviewers.
+        \item The claims made should match theoretical and experimental results, and reflect how much the results can be expected to generalize to other settings.
+        \item It is fine to include aspirational goals as motivation as long as it is clear that these goals are not attained by the paper.
+    \end{itemize}
+
+\item {\bf Limitations}
+    \item[] Question: Does the paper discuss the limitations of the work performed by the authors?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:limitations} has a dedicated Limitations section covering first-order model assumptions, the critic-side reversal, the SMAX residual mean gap, empirical scale ($n{=}5$ per cell), and future-work items. Appendix~\ref{app:theory_extended} expands the six scope limits of Proposition~\ref{prop:variance} in full.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper has no limitation while the answer \answerNo{} means that the paper has limitations, but those are not discussed in the paper.
+        \item The authors are encouraged to create a separate ``Limitations'' section in their paper.
+        \item The paper should point out any strong assumptions and how robust the results are to violations of these assumptions.
+        \item The authors should reflect on the scope of the claims made.
+        \item The authors should discuss the computational efficiency of the proposed algorithms and how they scale with dataset size.
+        \item If applicable, the authors should discuss possible limitations of their approach to address problems of privacy and fairness.
+        \item While the authors might fear that complete honesty about limitations might be used by reviewers as grounds for rejection, a worse outcome might be that reviewers discover limitations that aren't acknowledged in the paper.
+    \end{itemize}
+
+\item {\bf Theory assumptions and proofs}
+    \item[] Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Proposition~\ref{prop:variance} states all assumptions inline (local quadratic loss, i.i.d.\ noise, spectral-radius contraction). The full derivation is Appendix~\ref{app:proof}. Step-by-step context, colored-noise correction, linearization scope, and the $\lambda$-prediction scope are in Appendix~\ref{app:theory_extended}. All equations are numbered and cross-referenced.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not include theoretical results.
+        \item All the theorems, formulas, and proofs in the paper should be numbered and cross-referenced.
+        \item All assumptions should be clearly stated or referenced in the statement of any theorems.
+        \item The proofs can either appear in the main paper or the supplemental material.
+        \item Theorems and Lemmas that the proof relies upon should be properly referenced.
+    \end{itemize}
+
+    \item {\bf Experimental result reproducibility}
+    \item[] Question: Does the paper fully disclose all the information needed to reproduce the main experimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:method} specifies the ablation matrix, fix-path interventions, and target-source distinguishing test. Appendix~\ref{app:env_baselines_metrics} gives full environment specifications, baselines, and metric definitions. Appendix~\ref{app:hyperparams} lists all shared hyperparameters. All experiments use 5 seeds with bootstrap CIs. The code and configs are available at the anonymous repository in the abstract.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not include experiments.
+        \item If the paper includes experiments, a \answerNo{} answer to this question will not be perceived well by the reviewers.
+        \item If the contribution is a dataset and\slash or model, the authors should describe the steps taken to make their results reproducible or verifiable.
+    \end{itemize}
+
+
+\item {\bf Open access to data and code}
+    \item[] Question: Does the paper provide open access to the data and code, with sufficient instructions to faithfully reproduce the main experimental results, as described in supplemental material?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: Full code and all 375{+} result JSONs are at \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}. The repository includes a \texttt{reproduce.sh} script, Hydra configs for every experiment, and per-environment launch scripts. Data dependencies (JaxMARL environments, CIFAR-100 via torchvision) are open-source and loaded via standard pip installs.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that paper does not include experiments requiring code.
+        \item Please see the NeurIPS code and data submission guidelines.
+        \item The instructions should contain the exact command and environment needed to run to reproduce the results.
+        \item At submission time, to preserve anonymity, the authors should release anonymized versions.
+    \end{itemize}
+
+
+\item {\bf Experimental setting/details}
+    \item[] Question: Does the paper specify all the training and test details (e.g., data splits, hyperparameters, how they were chosen, type of optimizer) necessary to understand the results?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: \S\ref{sec:method} covers the ablation matrix; Appendix~\ref{app:env_baselines_metrics} provides full environment and baseline specs; Appendix~\ref{app:hyperparams} lists PPO clip, GAE $\lambda$, optimizer (Adam, lr $5\mathrm{e}{-4}$), discount, network dimensions, horizons per environment, and all VABL-specific knobs. The $\lambda$ sweep (Appendix~\ref{app:lambda}) and architecture sweep (Appendix~\ref{app:arch_sweep}) explicitly document hyperparameter selection.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not include experiments.
+        \item The experimental setting should be presented in the core of the paper to a level of detail that is necessary to appreciate the results and make sense of them.
+        \item The full details can be provided either with the code, in appendix, or as supplemental material.
+    \end{itemize}
+
+\item {\bf Experiment statistical significance}
+    \item[] Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All MARL and CIFAR-100 cells report mean $\pm$ population std over 5 random seeds. Effect sizes use Cohen's $d$; where the claim is a resolved effect, we report bootstrap 95\% confidence intervals on $d$ ($n_{\mathrm{boot}} = 10{,}000$) and explicitly flag when a CI crosses zero. See \S\ref{sec:mechanism} (target-source CIs), Table~\ref{tab:cross_env} footnote, and Appendix~\ref{app:metrics_full} for the full metric definition.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not include experiments.
+        \item The authors should answer \answerYes{} if the results are accompanied by error bars, confidence intervals, or statistical significance tests.
+        \item The factors of variability that the error bars are capturing should be clearly stated.
+        \item The method for calculating the error bars should be explained.
+    \end{itemize}
+
+\item {\bf Experiments compute resources}
+    \item[] Question: For each experiment, does the paper provide sufficient information on the computer resources (type of compute workers, memory, time of execution) needed to reproduce the experiments?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: All experiments were run on a single-GPU workstation with an NVIDIA RTX 5090 (32GB). A typical VABL 10M-step Overcooked run takes $\sim$2 hours; the CIFAR-100 $4 \times 5$-seed matrix takes $\sim$7.3 hours total; the full 375{+}-run matrix is $\sim$400 GPU-hours end-to-end. The repository \texttt{reproduce.sh} tracks per-experiment wallclock estimates. No cluster or distributed setup is required.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not include experiments.
+        \item The paper should indicate the type of compute workers CPU or GPU, internal cluster, or cloud provider.
+        \item The paper should provide the amount of compute required for each of the individual experimental runs as well as estimate the total compute.
+        \item The paper should disclose whether the full research project required more compute than the experiments reported in the paper.
+    \end{itemize}
+
+\item {\bf Code of ethics}
+    \item[] Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics \url{https://neurips.cc/public/EthicsGuidelines}?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The research studies gradient dynamics in cooperative multi-agent RL using standard synthetic environments (Overcooked, Hanabi, MPE, SMAX) and a public image dataset (CIFAR-100). No human subjects, no privacy-sensitive data, no dual-use model release. Anonymity is preserved in the submission and linked repository.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the authors have not reviewed the NeurIPS Code of Ethics.
+        \item If the authors answer \answerNo, they should explain the special circumstances that require a deviation from the Code of Ethics.
+        \item The authors should make sure to preserve anonymity.
+    \end{itemize}
+
+
+\item {\bf Broader impacts}
+    \item[] Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: This is a theoretical and empirical paper on gradient dynamics of auxiliary-loss training in cooperative reinforcement learning. It does not propose a deployable model, training recipe for a production system, or dataset with differential access risks. We see no direct societal-impact pathway distinct from the general impact of MARL research.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that there is no societal impact of the work performed.
+        \item The conference expects that many papers will be foundational research and not tied to particular applications.
+    \end{itemize}
+
+\item {\bf Safeguards}
+    \item[] Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: The paper does not release pretrained models, generative models, or scraped datasets. The only released artifacts are training code and result JSONs, both of which pose no identifiable misuse risk.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper poses no such risks.
+    \end{itemize}
+
+\item {\bf Licenses for existing assets}
+    \item[] Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: JaxMARL~\cite{rutherford2024jaxmarl} (Apache 2.0), Overcooked-AI~\cite{carroll2019utility} (MIT), SMAC/SMACv2~\cite{samvelyan2019starcraft,ellis2023smacv2} (MIT), Hanabi~\cite{bard2020hanabi} (Apache 2.0), CIFAR-100~\cite{krizhevsky2009learning} (research use). All are cited in Related Work and Appendix~\ref{app:env_specs}; our use complies with each license.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not use existing assets.
+        \item The authors should cite the original paper that produced the code package or dataset.
+        \item The name of the license should be included for each asset.
+    \end{itemize}
+
+\item {\bf New assets}
+    \item[] Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets?
+    \item[] Answer: \answerYes{}
+    \item[] Justification: The VABL implementation, all experiment scripts, and the complete results matrix (375{+} JSON files) are released at the anonymous repository. The repository includes a README, a \texttt{reproduce.sh} driver, per-experiment launch scripts, analysis scripts, and plotting code. Intended use, scope, and known limitations are documented alongside the code.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not release new assets.
+        \item Researchers should communicate the details of the dataset\slash code\slash model as part of their submissions via structured templates.
+        \item At submission time, remember to anonymize your assets.
+    \end{itemize}
+
+\item {\bf Crowdsourcing and research with human subjects}
+    \item[] Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No crowdsourcing or human-subject research. All data come from simulated environments and a public image dataset.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not involve crowdsourcing nor research with human subjects.
+    \end{itemize}
+
+\item {\bf Institutional review board (IRB) approvals or equivalent for research with human subjects}
+    \item[] Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: No human subjects, so no IRB review is applicable.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the paper does not involve crowdsourcing nor research with human subjects.
+    \end{itemize}
+
+\item {\bf Declaration of LLM usage}
+    \item[] Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research?
+    \item[] Answer: \answerNA{}
+    \item[] Justification: LLMs were used only for writing, editing, and formatting assistance. They are not a component of the core methodology, theoretical derivation, or experimental setup.
+    \item[] Guidelines:
+    \begin{itemize}
+        \item The answer \answerNA{} means that the core method development in this research does not involve LLMs as any important, original, or non-standard components.
+    \end{itemize}
+
+\end{enumerate}

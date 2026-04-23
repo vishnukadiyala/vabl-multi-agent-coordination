@@ -24,6 +24,9 @@
 \usepackage{algorithmic}
 \usepackage{microtype}
 \usepackage{xcolor}
+\usepackage{float}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning}
 
 \theoremstyle{plain}
 \newtheorem{theorem}{Theorem}
@@ -34,8 +37,8 @@
 \theoremstyle{remark}
 \newtheorem{remark}[theorem]{Remark}
 
-\title{Structured Non-Stationary Auxiliary Targets\\
-Induce Directional Gradient Noise Near Convergence}
+\title{When Auxiliary Losses Fail:\\
+Non-Stationary Targets Induce Directional Gradient Noise}
 
 % Author block hidden for anonymous review.
 % \author{
@@ -55,37 +58,31 @@ Induce Directional Gradient Noise Near Convergence}
 \maketitle
 
 \begin{abstract}
-Auxiliary prediction losses are used widely to stabilize representation
-learning under sparse rewards, from UNREAL~\cite{jaderberg2016reinforcement}
-and world models~\cite{hafner2023mastering} to self-predictive
-representations~\cite{schwarzer2021dataefficient} and cooperative MARL
-methods such as Dynamic Belief~\cite{zhai2023dynamic} and
-BEPAL~\cite{huang2025bepal}. We argue that a previously uncharacterized
-learning-dynamics mechanism governs when this pattern succeeds and
-when it fails: \emph{auxiliary gradients carrying targets that are
-both structured (task-coupled) and non-stationary (drifting as other
-learners update) inject directional noise into the shared encoder
-that dominates policy gradients near convergence}. The failure is
-\emph{directional}, not magnitude-based, and \emph{target-driven},
-not multi-task conflict. We test this principle in cooperative MARL
+Auxiliary losses often stabilize representation learning, yet
+sometimes degrade late-training performance in ways that look like
+ordinary RL noise. We identify a learning-dynamics mechanism
+governing this failure: when auxiliary targets are both
+\emph{structured} (coupled to the current task state) and
+\emph{non-stationary} (drifting as other learners update), they
+inject directional gradient noise that dominates policy gradients
+near convergence. The effect is not magnitude imbalance, not
+multi-task conflict, and not capacity consumption; it is driven by
+target drift across learners. We test this principle in cooperative MARL
 where co-learning teammates provide the natural non-stationarity.
 A target-source distinguishing experiment holds aux capacity,
 architecture, and the aux-to-encoder gradient pathway fixed and
-varies only the target: co-learning teammate targets are pathological
-($463 \pm 9$); frozen-initial-policy targets (structured but stationary)
-partially recover ($470 \pm 5$); uniform random targets (unstructured,
-stationary) fully recover the no-aux regime ($474 \pm 2$). A
-complementary $8\times$ aux-capacity sweep has no effect, ruling out
-capacity consumption. Supervised CIFAR-100 (stationary targets by
-construction) defines the principle's boundary: zero effect, as the
-theory predicts. The target-source ordering itself is the principle's prediction:
-random targets (stationary, unstructured) should show no effect,
-frozen targets (stationary, structured) should reduce the effect,
-teammate targets (non-stationary, structured) should be fully
-pathological. The experiments confirm this ordering.
+varies only the target: co-learning teammate targets are
+pathological ($463 \pm 9$, $d = +1.40$ vs No Aux with bootstrap CI
+above zero); frozen-initial-policy targets (structured but stationary)
+and uniform random targets (unstructured, stationary) are both
+statistically indistinguishable from the No Aux regime at $n{=}5$.
+A complementary $8\times$ aux-capacity sweep has no effect, jointly
+ruling out capacity consumption on two independent axes. Supervised
+CIFAR-100 defines the principle's boundary: zero effect, as the
+theory predicts.
 Effect size scales with coordination complexity across four MARL
-benchmarks (Hanabi, Cramped Room, AA, SMAX) and with environment
-teammate-policy drift rate, as the principle predicts. Three
+benchmarks (Hanabi, Cramped Room, AA, SMAX) and with target-policy
+drift rate, as the principle predicts. Three
 gradient-pathway interventions recover the no-aux regime on
 Overcooked. All 375{+} runs and code at
 \url{https://anonymous.4open.science/r/aux-loss-considered-harmful}.
@@ -108,20 +105,42 @@ silently corrupts late-training convergence with cross-seed variance
 that looks like ordinary RL noise. This paper identifies the
 learning-dynamics principle that separates the two regimes.
 
-\textbf{The principle.} Auxiliary gradients carrying targets that are
-both \emph{structured} (coupled to the current task state) and
-\emph{non-stationary} (drifting as other learners update) inject
-\emph{directional} noise into the shared encoder that dominates policy
-gradients near convergence. The failure is not magnitude-based (aux-to-policy
-magnitude ratios stay below $0.25$; PCGrad~\cite{yu2020gradient},
-GradNorm~\cite{chen2018gradnorm}-style gradient surgery does not
-address it), not multi-task conflict (a single auxiliary is enough),
-and not capacity-driven ($8\times$ aux capacity sweep has no effect).
-What matters is the \emph{target}: when it drifts with another
-learner's updates, the gradient direction becomes a non-stationary
-process that shrinking policy gradients near convergence cannot
-dominate. Table~\ref{tab:contrast} locates this claim relative to
-prior work.
+\emph{\textbf{Principle (informal).} Auxiliary learning fails most
+severely when targets are both structured and co-adaptive, because
+the resulting gradient direction becomes a non-stationary process
+that overwhelms the vanishing policy gradient near convergence;
+removing either ingredient reduces the effect.}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=6pt and 16pt,
+    box/.style={draw, rounded corners=2pt, inner sep=5pt, align=center, font=\footnotesize, minimum height=7mm},
+    arr/.style={-{Latex[length=2mm]}, thick}
+]
+\node[box] (t) {Target-policy\\ updates};
+\node[box, right=of t] (sp) {Target drift\\ $\Sigma_\pi$};
+\node[box, right=of sp] (se) {Directional noise\\ $\Sigma_\varepsilon = J_\pi \Sigma_\pi J_\pi^\top$};
+\node[box, right=of se] (inst) {Instability\\ near convergence};
+\draw[arr] (t) -- (sp);
+\draw[arr] (sp) -- (se);
+\draw[arr] (se) -- (inst);
+\end{tikzpicture}
+\caption{Causal chain from a co-adaptive target-generating policy to late-training instability. The Jacobian $J_\pi$ is a fixed sensitivity of the aux gradient to the target policy (Step~2); the drift covariance $\Sigma_\pi$ is the time-varying input. Eq.~\eqref{eq:drift_to_noise} combines them; Proposition~\ref{prop:variance} closes the chain to parameter variance.}
+\label{fig:causal_chain}
+\end{figure}
+
+\textbf{What it is, what it is not.} The failure mechanism is
+\emph{directional}, not magnitude-based: gradient-surgery methods
+that rebalance magnitudes (PCGrad~\cite{yu2020gradient},
+GradNorm~\cite{chen2018gradnorm}) do not address it. It is not
+multi-task conflict, because a single auxiliary is enough. And it is
+not capacity consumption, because an $8\times$ sweep of aux capacity
+has no effect. What matters is the \emph{target}: when it drifts
+with another learner's updates, the aux-gradient direction becomes
+a non-stationary process that shrinking policy gradients near
+convergence cannot dominate. Table~\ref{tab:contrast} locates this
+claim relative to prior work.
 
 \begin{table}[t]
 \centering
@@ -157,25 +176,35 @@ pathology scales with coordination-induced teammate drift across four
 MARL benchmarks; MPE's slow symmetric drift and supervised CIFAR-100
 show zero effect as the principle predicts for stationary targets.
 
-\textbf{Contributions.} \textbf{(1)}~A learning-dynamics principle:
-structured non-stationary auxiliary targets inject directional noise
-that dominates policy gradients near convergence; the principle makes
-a testable ordering prediction over target sources.
-\textbf{(2)}~Causal identification in cooperative MARL via a
-target-source test and an $8\times$ aux-capacity sweep that jointly
-rule out generic capacity-consumption and multi-task-conflict
-alternatives. \textbf{(3)}~Boundary of the principle: stationary
-supervised targets show zero effect (CIFAR-100) and slow symmetric
-drift shows near-zero effect (MPE), while coordination-induced
-teammate drift produces pathology on four MARL benchmarks.
-\textbf{(4)}~Three gradient-pathway interventions ($\lambda$-annealing,
-stop-gradient on the belief, critic-side aux placement) recover the
-no-aux regime on Overcooked; SMAX retains a residual mean gap with
-non-monotonic $\lambda$ response that we flag as open.
-\textbf{(5)}~A reproducible 375{+}-run benchmark with 5 seeds and
-bootstrap CIs. As a secondary finding (\S\ref{sec:budget}), much of
-the widely reported Overcooked coordination collapse is a
-training-budget artifact.
+\textbf{Contributions.}
+\begin{itemize}
+\item \textbf{Principle.} A learning-dynamics failure mode:
+structured, non-stationary auxiliary targets induce directional
+gradient noise near convergence, with a testable ordering prediction
+over target sources (random $<$ frozen $<$ co-learning).
+\item \textbf{Causal identification.} A target-source intervention
+and an $8\times$ aux-capacity sweep jointly rule out generic
+capacity-consumption and multi-task-conflict alternatives in
+cooperative MARL.
+\item \textbf{Theory.} A first-order model linking teammate drift
+to gradient noise via
+$\Sigma_\varepsilon \approx J_\pi \Sigma_\pi J_\pi^\top$
+(Eq.~\eqref{eq:drift_to_noise}), with a drift-to-variance bound
+and a measurable cosine-std proxy ($R^2 = 0.94$ across logged conditions).
+\item \textbf{Validation.} The predicted ordering and null conditions
+hold across four cooperative MARL benchmarks, a supervised-stationary
+boundary (CIFAR-100), and a slow-symmetric-drift boundary
+(MPE simple\_spread).
+\item \textbf{Practical fixes.} Three gradient-pathway interventions
+($\lambda$-annealing, stop-gradient on the belief, critic-side aux
+placement) recover the no-aux regime on Overcooked; SMAX retains a
+residual mean gap with non-monotonic $\lambda$ response that we flag
+as open.
+\item \textbf{Benchmark.} A reproducible 375{+}-run matrix with 5
+seeds and bootstrap CIs. As a secondary finding (\S\ref{sec:budget}),
+much of the widely reported Overcooked coordination collapse is a
+training-budget artifact distinct from our pathology.
+\end{itemize}
 
 
 % ============================================================================
@@ -205,7 +234,12 @@ we study (attention-based belief encoder $+$ fixed-weight
 teammate-future-prediction aux). Zhai et al.~\cite{zhai2023dynamic}'s
 Static-Belief ablation (their Table~2) reports that naive co-training
 drops Traffic Junction success from $73.4\%$ to $71.9\%$; their fix
-is a meta-learned dynamic context.
+is a meta-learned dynamic context, while we identify the mechanism
+and show pathway-severing interventions suffice without
+meta-learning. BEPAL's oracle (stationary) targets are consistent
+with the principle. Contemporaneous~\cite{weng2026exploration}
+identifies a distinct magnitude-driven pathology in parameter-shared
+DQN.
 
 \paragraph{Attention and stop-gradient.}
 AERIAL~\cite{phan2023attention} uses QMIX-based attention over
@@ -226,7 +260,17 @@ learning~\cite{nekoei2023dealing} project, reweight, or decouple
 gradients by magnitude or across agents; direction-oriented
 multi-objective
 optimization~\cite{xiao2023sdmgrad,zhang2025mgda,patapati2025graphcoloring}
-schedules by inter-task gradient conflict. Offline
+schedules by inter-task gradient conflict.
+Cosine-based gradient-alignment diagnostics have appeared on
+several axes: ROCKET~\cite{sun2026rocket} identifies cross-layer
+gradient conflict in representation alignment and shows that a
+shared (PSD-structured) projector eliminates it;
+GAC~\cite{xu2026gac} uses consecutive-step gradient cosine as a
+stability signal for asynchronous LLM RL; DG-PG~\cite{yang2026dgpg}
+decomposes cooperative-MARL gradient variance into self versus
+cross-agent components with closed-form variance-reduction
+combining. Our setting is the temporal policy-vs-auxiliary axis
+within a single agent. Offline
 MARL~\cite{tilbury2024coordination} identifies a distinct directional
 pathology from data-mean-biased best responses. Our pathology is
 intra-agent, directional rather than magnitude-driven
@@ -246,19 +290,15 @@ residual instability we identify is distinct and gradient-mediated.
 
 The design pattern we investigate, attention-based belief encoders
 trained with constant-weight auxiliary prediction losses targeting
-teammate future behavior, has two recent published instances.
-BEPAL~\cite{huang2025bepal} uses a shared LSTM with attention over
-teammate messages and belief-decoder heads predicting teammates'
-future motion and reward with fixed weights; Dynamic
-Belief~\cite{zhai2023dynamic} uses soft attention over episode history
-with a VAE-based head predicting teammates' future actions with fixed
-weights. These sit within the broader family of world-model and
-self-predictive architectures that use constant auxiliary
-weights~\cite{hafner2023mastering,schwarzer2021dataefficient,jaderberg2016reinforcement}.
-We construct \textbf{VABL} as a minimal architecture in this class,
-operating on cooperative Dec-POMDPs~\cite{oliehoek2016concise}, and
-chosen so that attention, the auxiliary loss, and the gradient flow
-between them can be manipulated independently.
+teammate future behavior, has recent instances in
+BEPAL~\cite{huang2025bepal} and Dynamic
+Belief~\cite{zhai2023dynamic}, and sits within the broader family of
+constant-weight aux
+architectures~\cite{hafner2023mastering,schwarzer2021dataefficient,jaderberg2016reinforcement}.
+We construct \textbf{VABL} as a minimal cooperative
+Dec-POMDP~\cite{oliehoek2016concise} instance of this class in which
+attention, aux loss, and aux-to-encoder gradient flow can each be
+manipulated independently.
 
 \paragraph{Belief update.}
 Each agent $i$ maintains a recurrent latent belief $b_t^i \in
@@ -274,23 +314,13 @@ teammate actions:
 where $\mathrm{GRU}$ denotes a gated recurrent unit~\cite{cho2014gru}.
 
 \paragraph{Attention context.}
-The social context is computed via multi-head attention~\cite{vaswani2017attention} over action embeddings
-of visible teammates:
-\begin{equation}
-    c_t^i = \mathrm{MHA}\left(
-        \mathrm{query} = W_q b_{t-1}^i, \quad
-        \mathrm{keys/values} = \{\psi_\theta(a_{t-1}^j) + e_j\}_{j \neq i}
-    \right),
-\end{equation}
-where $\psi_\theta$ is an action encoder, $e_j \in \mathbb{R}^{d_e}$ is
-a learnable identity embedding for teammate $j$, and
-$m_t^{i \leftarrow j} \in \{0,1\}$ is a per-timestep visibility mask (in
-Overcooked, whether agent $j$ is within agent $i$'s visible tile
-region; in SMAX, within sight range; in MPE, within observation
-radius). The attention softmax zeros out masked entries, so invisible
-teammates contribute neither to $c_t^i$ nor to the auxiliary loss. When
-no attention is used (the mean-pooling ablation), $c_t^i$ is the
-unweighted average of visible teammate action embeddings.
+The social context $c_t^i$ is computed via multi-head
+attention~\cite{vaswani2017attention} over action embeddings of
+visible teammates, with query $W_q b_{t-1}^i$ and keys/values
+$\{\psi_\theta(a_{t-1}^j) + e_j\}_{j \neq i}$ (learnable identity
+embeddings $e_j$); per-step visibility masks zero out invisible
+teammates. The mean-pooling ablation replaces MHA with the
+unweighted average.
 
 \paragraph{Policy and auxiliary heads.}
 The policy $\pi_\theta(a_t^i \mid b_t^i)$ is a linear head on the belief.
@@ -327,14 +357,16 @@ this pathway as the source of the late-training instability.
 \label{sec:theory}
 % ============================================================================
 
-We close the loop from co-learning to parameter variance in four
-steps: (i) define directional interference and distinguish it from
-magnitude interference; (ii) derive the aux-gradient noise covariance
-from teammate-policy drift; (iii) bound late-training parameter
-variance in terms of that covariance; (iv) state a threshold
-condition for instability onset. The model is a \emph{first-order
-mechanistic} derivation: it connects co-learning dynamics to observed
-instability through causally upstream quantities ($\Sigma_\pi$,
+\emph{Intuitively, as policy gradients shrink near convergence, even
+small fluctuations in auxiliary gradient direction can dominate
+updates, turning convergence into a stochastic drift process.} We
+derive a first-order mechanistic model of this effect in four steps:
+(i) define directional interference and distinguish it from magnitude
+interference; (ii) derive the aux-gradient noise covariance from
+target-policy drift; (iii) bound late-training parameter variance
+in terms of that covariance; (iv) state a threshold condition for
+instability onset. The model connects co-learning dynamics to
+observed instability through causally upstream quantities ($\Sigma_\pi$,
 $J_\pi$) rather than treating gradient noise as exogenous, using
 standard linearization steps we make explicit below.
 
@@ -365,11 +397,17 @@ Figure~\ref{fig:gradients} measures Full VABL's late-training signature
 $I_{\mathrm{dir}} \gg I_{\mathrm{mag}}$.
 
 \paragraph{Step 2: deriving $\Sigma_\varepsilon$ from teammate drift.}
-Let $\pi_j \in \mathbb{R}^{d_\pi}$ denote the teammate's policy
-represented either by its parameters or, equivalently in the linear
-regime, by its action-probability vector stacked over the observed
-state distribution. Decompose the aux gradient as $g_{\mathrm{aux}}(t)
-= \bar g_{\mathrm{aux}} + \varepsilon(t)$. A first-order expansion of
+Let $\pi_j \in \mathbb{R}^{d_\pi}$ denote the policy whose actions
+define the aux label at step $t$; in Full VABL this is the teammate's
+own co-learning policy, while the frozen-target and random-target
+conditions (\S\ref{sec:method_distinguishing}) replace it with a
+stationary alternative, so that $\Sigma_\pi$ and $J_\pi$ below
+always refer to the target-generating policy rather than to any
+other agent. Represent $\pi_j$ either by its parameters or,
+equivalently in the linear regime, by its action-probability vector
+stacked over the observed state distribution. Decompose the aux
+gradient as $g_{\mathrm{aux}}(t) = \bar g_{\mathrm{aux}} +
+\varepsilon(t)$. A first-order expansion of
 $g_{\mathrm{aux}}$ around $\bar\pi_j$, the time-averaged teammate
 policy over the analysis window, gives
 \begin{equation}
@@ -383,18 +421,25 @@ policy over the analysis window, gives
 where $J_\pi \in \mathbb{R}^{|\theta| \times d_\pi} = \partial
 g_{\mathrm{aux}}/\partial \pi_j |_{\bar\pi_j}$ and $J_\pi$ absorbs
 the $\lambda$ scaling of $g_{\mathrm{aux}}$. The gradient noise
-covariance factors through the teammate-policy drift covariance. Two
+covariance factors through the target-generating policy's drift
+covariance. Two
 limits: frozen teammate ($\Sigma_\pi = 0$) gives
 $\Sigma_\varepsilon \to 0$; a target constructed not to depend on
 teammate policy ($J_\pi = 0$, e.g.\ random or supervised targets)
 also gives $\Sigma_\varepsilon \to 0$. The target-source
 distinguishing test (\S\ref{sec:mechanism}) realizes both limits
-empirically.
-The linearization is local in policy space; it is exact for small
-per-window drift $\|\pi_j^{(t)} - \bar\pi_j\|$ and is our main
-quantitative simplification. Restricting the analysis window to
-late training (where policy convergence implies smaller drift per
-iteration) improves the approximation.
+empirically. Equivalently, DG-PG's variance-reduction framework for
+cooperative MARL~\cite{yang2026dgpg} assumes an
+\emph{exogenous} guidance target, $\nabla_\theta \tilde{x} = 0$
+(their Assumption~3.1); in our setting the aux target is the
+teammate's action, which depends on the teammate's co-evolving
+policy, so this exogeneity assumption is violated and
+$\Sigma_\varepsilon$ is driven by $\Sigma_\pi$ rather than
+collapsing. The $\delta$-stationarity bound
+of~\cite{li2022trustregion} formalizes $\Sigma_\pi$ via the
+KL-divergence of consecutive joint policies.
+The linearization is local in policy space and tightest in late
+training, where convergence implies small per-iteration drift.
 
 \paragraph{Step 3: noise-driven parameter variance.}
 Near a local optimum $\theta^*$ the policy loss is approximately
@@ -423,30 +468,27 @@ displacement variance satisfies
 \end{equation}
 \end{proposition}
 
-We caution that the bound gives the scaling \emph{shape}, not
-absolute magnitude. Real $\varepsilon(t)$ is autocorrelated
-(consecutive teammate policies differ by one gradient step); a
-colored-noise treatment multiplies the right-hand side by an
-autocorrelation-time factor $\tau_c$. The scaling with
-$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ and $\lambda_{\min}(H)$ is
-preserved, but $\tau_c$ can be large for fast-learning teammates, so
-the bound may underestimate absolute variance in practice (see
-Scope paragraph).
+The bound gives the scaling \emph{shape}, not absolute magnitude:
+colored $\varepsilon(t)$ inflates the right-hand side by an
+autocorrelation-time factor $\tau_c$ without changing the
+dependence on $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ or
+$\lambda_{\min}(H)$.
 
 \paragraph{Step 4: threshold and testable predictions.}
-Displacement competes with the signal from policy-gradient progress.
-Let $\eta = \mathbb{E}_t[\|H \delta(t)\|] \sim \alpha \eta^2 /
-\lambda_{\min}(H)$ estimate the per-iteration progress scale.
-Instability onset corresponds to
+Let $\eta = \mathbb{E}_t[\|g_\pi(t)\|]$ denote the typical
+policy-gradient magnitude; the same Lyapunov argument behind
+Proposition~\ref{prop:variance} gives a policy-signal displacement
+variance $\alpha^2 \eta^2 / \lambda_{\min}(H)$. Instability onset
+corresponds to the aux-drift variance exceeding this signal variance:
 \begin{equation}
-    \underbrace{\frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}}_{\text{aux-drift noise (variance)}}
+    \underbrace{\frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}}_{\text{aux-drift variance}}
     \;\gtrsim\;
-    \underbrace{\frac{\alpha \eta^2}{\lambda_{\min}(H)}}_{\text{policy signal (progress)}},
+    \underbrace{\frac{\alpha^2 \eta^2}{\lambda_{\min}(H)}}_{\text{policy-signal variance}},
     \label{eq:threshold}
 \end{equation}
-i.e., aux-drift variance exceeds the displacement attributable to
-policy-gradient progress at the same operating point. This yields
-three testable predictions:
+equivalently $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top) \gtrsim
+\eta^2$ after the common $\alpha^2/\lambda_{\min}(H)$ factor
+cancels. This yields three testable predictions:
 \textbf{(a) Stationarity null}: $\Sigma_\pi \approx 0$ (supervised
 labels, symmetric slow drift) $\Rightarrow$ no pathology.
 \textbf{(b) Pathway null}: interventions that drive
@@ -459,92 +501,60 @@ $\Rightarrow$ both non-zero) predicts the pathology-severity ordering.
 All three are tested in \S\ref{sec:mechanism}--\ref{sec:cross_env}.
 
 \textbf{Scope of the $\lambda$ prediction.}
-Since $g_{\mathrm{aux}} \propto \lambda$, the first-order bound
-predicts displacement variance $\propto \lambda^2$. Our $\lambda$
-sweep (Appendix~\ref{app:lambda}) is \emph{not} monotonic: Final50
-std at $\lambda \in \{0.001, 0.01, 0.05\}$ is
-$\{6.37, 1.67, 8.55\}$ respectively. The first-order bound holds
-locally in $\lambda$ (variance increases as $\lambda$ grows from
-$0.01$ to $0.05$) but fails across the full range because aux-head
-representations co-adapt with $\lambda$: at very small $\lambda$ the
-aux head receives too little signal to organize, so $J_\pi$ itself
-depends on $\lambda$ in a way the first-order analysis does not
-capture. The monotonic-$\lambda$ prediction should be read as
-``within a $\lambda$ range where aux-head representations are
-qualitatively unchanged,'' not as a global prediction across
-$\lambda \in [0, \infty)$.
+The bound predicts variance $\propto \lambda^2$ locally; our
+3-point sweep is non-monotonic because $J_\pi$ itself co-adapts
+with $\lambda$ at small $\lambda$ (Appendix~\ref{app:lambda}).
+The prediction holds within a $\lambda$ range where aux-head
+representations are qualitatively unchanged, not globally.
 
 \paragraph{Interpreting $J_\pi$.}
-$J_\pi$ is the sensitivity of the aux gradient to the teammate action
-distribution, evaluated around the time-averaged teammate policy. In
-VABL its column space coincides with the pathway through
-attention/GRU/$\phi_\theta$ by which teammate one-hot inputs influence
-the aux head's predictions: large when the aux head is tightly tuned
-to the current teammate, small when the encoder is structurally
-insensitive (mean pooling collapses heterogeneous teammates,
-stop-gradient cuts the encoder-side coupling, critic-side placement
-routes $g_{\mathrm{aux}}$ away from the actor encoder entirely).
+$J_\pi$ is the sensitivity of the aux gradient to the teammate
+action distribution; its column space coincides with the pathway
+through attention/GRU/$\phi_\theta$. It is large when the aux head
+is tightly tuned to the current teammate and small when the encoder
+is structurally insensitive (mean pooling, stop-gradient, or
+critic-side placement).
 
 \paragraph{From cosine to proxy.}
-Linearizing $\cos(g_\pi, g_{\mathrm{aux}})$ about
-$(g_\pi, \bar g_{\mathrm{aux}})$ at fixed norms gives
+Linearizing $\cos(g_\pi, g_{\mathrm{aux}})$ at fixed norms,
 $\mathrm{Var}_t[\cos] \approx \hat g_\pi^\top \Sigma_\varepsilon
-\hat g_\pi / \|\bar g_{\mathrm{aux}}\|^2$ where $\hat g_\pi =
-g_\pi/\|g_\pi\|$. For symmetric noise $\Sigma_\varepsilon$, this is
-the $\hat g_\pi$-projection of $\Sigma_\varepsilon$ and upper-bounded
-by $\mathrm{tr}(\Sigma_\varepsilon)/\|\bar g_{\mathrm{aux}}\|^2$, so
+\hat g_\pi / \|\bar g_{\mathrm{aux}}\|^2 \leq
+\mathrm{tr}(\Sigma_\varepsilon)/\|\bar g_{\mathrm{aux}}\|^2$, so
 the cosine temporal std is a finite-sample proxy for normalized
-$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)^{1/2}$. We measure both
-quantities on the analysis window (final $50\%$ of training, where
-the local-quadratic approximation is most valid);
-Figure~\ref{fig:proxy} plots the proxy against Final50 cross-seed
-std across our four logged conditions (linear $R^2 = 0.94$ across
-conditions; three of four conditions have proxy zero by pathway
-construction, so the plot verifies the ordering rather than the
-slope). Within Full's 5 seeds, per-seed cosine std correlates
-positively with per-seed peak-to-Final50 drop ($r = +0.40$, weak at
-$n{=}5$).
+$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)^{1/2}$, measured on the
+final $50\%$ window. GAC's consecutive-step cosine diagnostic in
+async LLM RL~\cite{xu2026gac} is a related but distinct temporal
+metric (single-stream autocorrelation, not policy-vs-aux alignment).
+Figure~\ref{fig:proxy} shows $R^2 = 0.94$ across our four logged
+conditions (three have proxy zero by construction, so the plot
+verifies ordering more than slope). Within Full's 5 seeds,
+per-seed cosine std correlates with per-seed peak-to-Final50 drop
+at $r = +0.40$ (weak at $n{=}5$).
 
 \paragraph{Drift-gated aux.}
-Eq.~\eqref{eq:threshold} yields an online controller: maintain a
-sliding-window estimate $\hat s(t)$ of $\cos(g_\pi, g_{\mathrm{aux}})$
-std, and gate the aux-to-encoder pathway on the rule
-$\hat s(t) > \tau \Rightarrow \mathtt{stop\_gradient}(b_t) $ before
-the aux head. This interpolates between always-on ($\tau {=} \infty$)
-and stop-gradient ($\tau {=} 0$) limits we study; evaluating it is
-future work.
+Eq.~\eqref{eq:threshold} yields an online controller: gate
+\texttt{stop\_gradient} on the aux-to-encoder pathway whenever a
+sliding-window estimate $\hat s(t)$ of $\mathrm{std}(\cos)$ exceeds
+$\tau$, interpolating between always-on and stop-gradient limits.
+DG-PG~\cite{yang2026dgpg} (Theorem~4.2) gives a closed-form optimal
+$\alpha^*(t)$ for combining $(g_\pi, g_{\mathrm{aux}})$ with
+correlation $\rho = \mathbb{E}_t[\cos]$; our binary gating is a
+coarse approximation. COALA-PG~\cite{meulemans2024coala} formalizes
+the co-learning meta-POMDP underlying $\Sigma_\pi$. Empirical
+evaluation of both the continuous schedule and the gated variant
+is future work.
 
 \paragraph{Scope and open questions.}
-We want to be explicit about what the first-order model predicts and
-what it does not. \textbf{(i)} The i.i.d.\ noise assumption gives the
-variance-scaling \emph{shape} but not absolute magnitude: real
-$\varepsilon(t)$ is correlated across iterations (consecutive
-teammate updates are one gradient step apart), and for fast-learning
-teammates the autocorrelation factor $\tau_c$ can be large, so the
-bound can underestimate the true variance substantially without
-changing its direction. \textbf{(ii)} The local-quadratic
-approximation is most accurate where teammate drift is smallest, so
-the theory's formal bounds apply most tightly in late training where
-the pathology is least severe, and apply less tightly mid-training
-where the worst cross-seed instability actually occurs. \textbf{(iii)}
-The proxy--variance ordering (Figure~\ref{fig:proxy}, $R^2 = 0.94$)
-is dominated by the categorical separation between Full (non-zero
-proxy) and the three pathway-zero conditions; the plot verifies
-ordering more than slope. \textbf{(iv)} The theory explains how
-severing $J_\pi$ in the encoder subspace eliminates encoder-side
-directional interference, but says nothing about what happens when
-$g_{\mathrm{aux}}$ is instead routed through the critic (the
-critic-side reversal we observe, $d = -0.79$, Appendix~\ref{app:arch_sweep},
-falls outside the scope of Proposition~\ref{prop:variance}).
-\textbf{(v)} The SMAX residual mean gap (variance recovers under fix
-paths, mean does not) is not consistent with a purely zero-mean
-directional-noise mechanism: symmetric oscillation should not bias
-the mean. Either a secondary pathology coexists in SMAX or the
-zero-mean assumption of $\varepsilon(t)$ is too strong there; we
-flag this as open. \textbf{(vi)} The monotonic-$\lambda$ prediction
-fails globally because aux-head representations co-adapt with
-$\lambda$, making $J_\pi$ itself $\lambda$-dependent; the first-order
-bound is local in $\lambda$.
+The first-order model gives the variance-scaling \emph{shape}, not
+absolute magnitude: autocorrelated $\varepsilon(t)$ can inflate the
+true variance by an $O(\tau_c)$ factor without changing sign. The
+local-quadratic approximation applies most tightly in late training
+where drift is small (also where the pathology is least severe).
+The critic-side reversal we observe ($d = -0.79$,
+Appendix~\ref{app:arch_sweep}) and the SMAX residual mean gap (fix
+paths recover variance but not mean) fall outside the scope of
+Proposition~\ref{prop:variance}; the latter is inconsistent with a
+purely zero-mean noise mechanism and we flag it as open.
 
 \begin{figure}[t]
 \centering
@@ -573,93 +583,33 @@ still trains but gradients do not reach the encoder), and
 \subsection{Target-Source Distinguishing Test}
 \label{sec:method_distinguishing}
 
-To distinguish a directional-interference mechanism driven by
-structured, non-stationary aux targets from a generic
-aux-capacity-consumption alternative, we run Full VABL with the aux
-targets replaced by two alternative sources that preserve the aux
-network, its capacity, and the aux-to-encoder gradient pathway
-identically to Full:
+To distinguish directional interference from capacity consumption,
+we run Full VABL with aux network, capacity, and gradient pathway
+identical to Full, varying \emph{only} the target source:
+\textbf{Frozen-policy targets} (argmax of an iteration-0 random-init
+snapshot $\pi_{\theta_0}$: stationary but structured) and
+\textbf{Uniform random targets} (resampled each iteration: stationary
+and unstructured). Capacity consumption predicts both to be
+pathological; directional interference predicts recovery scaled by
+residual structure.
 
-\begin{itemize}
-\item \textbf{Frozen-policy targets.} At iteration~0 we snapshot the
-initial (random-init) agent parameters as $\theta_0$ and freeze them.
-At each subsequent iteration, the aux target for step $t{+}1$ is the
-argmax action of $\pi_{\theta_0}$ applied to the rollout observation,
-rather than the actual teammate action. Targets are \emph{stationary}
-(no drift with teammate co-learning) but remain \emph{structured}
-(they come from a real policy).
-\item \textbf{Uniform random targets.} The aux target for step $t{+}1$
-is an integer drawn uniformly at random from $\{0,\dots,|\mathcal{A}|{-}1\}$,
-resampled each iteration. Targets are \emph{stationary in expectation}
-and \emph{unstructured} (no co-learning signal, no semantic coupling
-to teammates).
-\end{itemize}
-Both interventions leave aux capacity, architecture, gradient
-pathway, and loss form identical to Full; they vary \emph{only} the
-source and structure of the target. The capacity-consumption
-hypothesis predicts both to be pathological. The directional-interference
-hypothesis predicts recovery to varying degrees, depending on whether
-the residual structure is stationary (frozen) or absent (random).
-
-\subsection{Environments}
-We evaluate four MARL environments via
-JaxMARL~\cite{rutherford2024jaxmarl} and one supervised control.
-\textbf{Overcooked}~\cite{carroll2019utility}: \emph{Asymmetric
-Advantages} and \emph{Cramped Room}, 2 agents, horizon 400,
-25{,}024 episodes ($\approx$10M steps), 64 vectorized envs.
-\textbf{Hanabi 2-player}~\cite{bard2020hanabi}: turn-based partial-info
-card game, horizon 80, 25K episodes.
-\textbf{MPE simple\_spread}~\cite{lowe2017multi}: 3 symmetric agents,
-horizon 25, 100K episodes.
-\textbf{SMAX 3v3}~\cite{rutherford2024jaxmarl}: 3 allies vs.\ 3
-heuristic enemies, horizon 100, 50K episodes, covering both
-SMAC~\cite{samvelyan2019starcraft} and SMAC
-v2~\cite{ellis2023smacv2} scenarios (tactical combat).
-
-\subsection{Baselines}
-
-We compare against four methods spanning three paradigms:
-\textbf{MAPPO}~\cite{yu2022surprising} (decentralized policy gradient),
-\textbf{TarMAC}~\cite{das2019tarmac} (targeted communication),
-\textbf{CommNet}~\cite{sukhbaatar2016commnet} (broadcast communication),
-and \textbf{AERIAL}~\cite{phan2023attention} (attention over teammate
-hidden states; our port uses PPO for comparability, the original is
-QMIX-based). All are reimplemented in JAX~\cite{bradbury2018jax} using
-JaxMARL~\cite{rutherford2024jaxmarl} with matched hyperparameters,
-env wrapper, and evaluation protocol. These baselines support the
-training-budget-artifact claim (\S\ref{sec:budget}): none exhibits our
-attention + teammate-prediction-aux design pattern, so they are not
-controls for the core mechanism. Direct re-implementation of Dynamic
-Belief~\cite{zhai2023dynamic} or BEPAL~\cite{huang2025bepal}, which do
-instantiate the pattern, would be a stronger external comparison and
-is left to future work; we rely instead on Zhai et al.'s
-independently-reported Static-Belief failure mode as external
-corroboration (\S\ref{sec:related}).
-
-\subsection{Cross-Domain Test}
-
-To test whether the pathology generalizes beyond MARL, we replicate the
-$2 \times 2$ ablation on CIFAR-100~\cite{krizhevsky2009learning} image
-classification with a small Vision
-Transformer~\cite{dosovitskiy2020image} (4 layers, 192 dim, 4 heads,
-patch size 4) and a RotNet auxiliary head (4-way rotation
-prediction)~\cite{gidaris2018unsupervised}. The auxiliary loss uses the
-same $\lambda = 0.05$ constant weight.
-
-\subsection{Metrics}
-
-\begin{itemize}
-    \item \textbf{Best}: maximum episode reward (or test accuracy) achieved
-    during training.
-    \item \textbf{Final50} (MARL) / \textbf{Final5} (vision): mean of the
-    last 50 episodes (or last 5 epochs), capturing the policy's stable
-    convergence level.
-    \item \textbf{Collapse \%}: $({\mathrm{Best} - \mathrm{Final}}) /
-    {\mathrm{Best}} \times 100$.
-    \item We report mean $\pm$ population standard deviation over 5 random
-    seeds for all MARL experiments, and Cohen's $d$~\cite{cohen1988statistical}
-    for effect sizes.
-\end{itemize}
+\subsection{Environments, baselines, and metrics}
+Four JaxMARL-based~\cite{rutherford2024jaxmarl} cooperative MARL
+environments (Overcooked~\cite{carroll2019utility} Asymmetric
+Advantages and Cramped Room, Hanabi 2-player~\cite{bard2020hanabi},
+MPE simple\_spread~\cite{lowe2017multi}, SMAX
+3v3~\cite{samvelyan2019starcraft,ellis2023smacv2}) plus CIFAR-100
+with a small ViT + RotNet aux head as a supervised-stationary
+control. Baselines cover three paradigms (decentralized policy
+gradient: MAPPO~\cite{yu2022surprising}; communication:
+TarMAC~\cite{das2019tarmac}, CommNet~\cite{sukhbaatar2016commnet};
+attention: AERIAL~\cite{phan2023attention}), reimplemented in JAX
+with matched hyperparameters. Metrics are Best (peak episode
+reward or test accuracy), Final50 (mean of last 50 episodes;
+Final5 for vision), cross-seed std, and Cohen's
+$d$~\cite{cohen1988statistical}; mean $\pm$ std over 5 seeds
+throughout. Full environment specs, baseline description, and
+metric definitions in Appendix~\ref{app:env_baselines_metrics}.
 
 
 % ============================================================================
@@ -718,25 +668,17 @@ No Aux (attn only) & \checkmark & -- & 484.4 & \textbf{473.45} & 3.62 & \textbf{
 \label{fig:dispersion}
 \end{figure}
 
-Table~\ref{tab:ablation} presents the 7-configuration ablation on
-Overcooked AA at 10M steps. Only the Full (attention + constant aux)
-configuration exhibits the pathology: Final50 is lower than every
-alternative (Cohen's $d \geq 0.88$, point estimate) with cross-seed std
-$2.3$--$4.6\times$ higher than the alternatives, while all seven
+Only Full exhibits the pathology (Cohen's $d \geq 0.88$ vs every
+alternative, cross-seed std $2.3$--$4.6\times$ larger) while all seven
 configurations reach comparable Best (within $\sim$2 points). The
-$2{\times}2$ interaction is clean on AA: neither attention alone nor
-the auxiliary loss alone causes the pathology; the instability
-requires \emph{both}. The Neither cell (mean pool, no aux) sits
-slightly below No~Attention (mean pool, aux on) within one std of
-both; at $n{=}5$ the two are statistically indistinguishable
-(Appendix~\ref{app:tables}). Three fix-path interventions (Group~B)
-all land in Final50 $[471.60, 473.66]$, a 2.06-point spread
-statistically indistinguishable from No Aux; stop-gradient alone
-drops the cross-seed std from $8.55$ to $2.13$, a $4\times$ reduction.
-This establishes the aux-to-encoder gradient pathway as the
-\emph{necessary conduit} for the pathology, but does not yet
-distinguish the specific mechanism (directional interference vs.
-generic capacity consumption).
+$2{\times}2$ interaction is clean on AA: the instability requires
+\emph{both} attention and the auxiliary loss; the Neither vs
+No~Attention gap is within one std (Appendix~\ref{app:tables}).
+All three fix paths (Group~B) land in Final50 $[471.60, 473.66]$,
+indistinguishable from No Aux; stop-gradient alone drops std
+$8.55 \to 2.13$. The aux-to-encoder pathway is thus necessary, but
+this does not yet distinguish directional interference from generic
+capacity consumption.
 
 \subsection{Causal Identification of the Mechanism}
 \label{sec:mechanism}
@@ -752,20 +694,19 @@ with two independent controls.
 the aux-to-encoder gradient pathway identical to Full and vary only
 the \emph{source} of the aux target (\S\ref{sec:method_distinguishing}).
 The capacity-consumption hypothesis predicts all three conditions to
-be pathological. Table~\ref{tab:target_source} falsifies this:
-frozen-policy targets partially recover (std $8.55 \to 4.52$, mean
-within $\sim 3$ points of No Aux), and uniform random targets fully
-recover the no-aux regime (Cohen's $d = -0.04$ vs No Aux, CI crossing
-zero; the tightest cross-seed std in the paper). Structured
-co-learning targets carry teammate-policy-specific information that
-drifts across iterations, yielding an aux gradient direction that
-shifts with teammate updates; frozen targets remove the drift while
-retaining structured content; random targets remove both. Only the
-structured-and-drifting combination degrades Final50 stability.
+be pathological. Table~\ref{tab:target_source} falsifies this: at
+$n{=}5$ both frozen and random targets are indistinguishable from
+No Aux (frozen vs No Aux $d{=}-0.75$, CI $[-2.73,{+}0.44]$; random
+vs No Aux $d{=}-0.04$, CI $[-1.47,{+}1.40]$; both cross zero),
+while teammate co-learning remains distinct from No Aux ($d{=}+1.40$,
+CI $[{+}0.47,{+}3.58]$). Structured co-learning targets carry
+teammate-policy-specific information that drifts across iterations;
+frozen targets remove the drift, random targets remove both. Only
+the structured-and-drifting combination degrades Final50 stability.
 
 \begin{table}[t]
 \centering
-\caption{Target-source distinguishing test on Overcooked AA (10M steps, 5 seeds). Aux network and gradient pathway identical to Full; only the target source varies. Teammate co-learning targets are pathological; frozen initial-policy targets (stationary but structured) partially recover; uniform random targets (stationary and unstructured) fully recover the no-aux regime.}
+\caption{Target-source distinguishing test on Overcooked AA (10M steps, 5 seeds). Aux network and gradient pathway identical to Full; only the target source varies. Teammate co-learning targets are pathological (Cohen's $d = +1.40$ vs No Aux, bootstrap CI $[+0.47, +3.58]$); frozen and random targets are both statistically indistinguishable from No Aux at $n{=}5$ (both CIs cross zero, \S\ref{sec:mechanism}), with random targets producing the tightest cross-seed std in the paper.}
 \label{tab:target_source}
 \small
 \begin{tabular}{lcccc}
@@ -816,27 +757,25 @@ hypothesis on two independent axes.
 \subsection{Fix Paths, Given the Mechanism}
 \label{sec:fixes}
 
-Each of the three fix paths in Table~\ref{tab:ablation}~(Group~B)
-drives $J_\pi \to 0$ in the encoder subspace (Pathway-null
-prediction): $\lambda$-annealing decays the aux contribution,
+Each Group-B intervention drives $J_\pi \to 0$ in the encoder
+subspace: $\lambda$-annealing decays the aux contribution,
 stop-gradient severs it at the belief, critic-side placement routes
-it away from the actor's encoder. All three land in Final50
-$[471.60, 473.66]$, indistinguishable from No Aux by bootstrap CI
-(Appendix~\ref{app:tables}); stop-gradient drops cross-seed std
-from $8.55$ to $2.13$ ($4\times$ reduction).
+it away from the actor encoder. All land in Final50
+$[471.60, 473.66]$, indistinguishable from No Aux
+(Appendix~\ref{app:tables}).
 
 \subsection{Cross-Environment Generalization}
 \label{sec:cross_env}
 
 \begin{table}[t]
 \centering
-\caption{Cross-environment generalization. Cohen's $d$ is No Aux vs Full on each task. Four cooperative benchmarks show the pathology; MPE navigation and supervised CIFAR-100 do not. Effect size grows with teammate-policy drift (see text).}
+\caption{Cross-environment generalization. Cohen's $d$ is No Aux vs Full on each task. Four cooperative benchmarks show the pathology; MPE navigation and supervised CIFAR-100 do not. Effect size grows with target-policy drift (see text).}
 \label{tab:cross_env}
 \small
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{lcccc}
 \toprule
-\textbf{Environment} & \textbf{Type} & \textbf{Full Final50} & \textbf{No Aux Final50} & \textbf{$d$} \\
+\textbf{Environment} & \textbf{Type} & \textbf{Full} & \textbf{No Aux} & \textbf{$d$} \\
 \midrule
 Overcooked Cramped Room      & cooperative & $409.70 \pm 1.41$ & $416.18 \pm 0.79$ & $\mathbf{+5.07}$ \\
 Hanabi (2p, turn-based)      & cooperative & $0.14 \pm 0.26$ & $2.81 \pm 1.32$ & $+2.81$ \\
@@ -844,82 +783,43 @@ Overcooked Asymm. Advantages & cooperative & $463.21 \pm 9.55$ & $473.45 \pm 4.0
 SMAX 3v3                     & cooperative & $10.60 \pm 0.46$ & $11.15 \pm 0.41$ & $+1.26$ \\
 \midrule
 MPE simple\_spread            & cooperative & $-18.82 \pm 0.99$ & $-18.77 \pm 1.02$ & $\sim 0$ \\
-CIFAR-100 (ViT)              & supervised  & $43.90$ & $43.47$ & $\sim 0$ \\
+CIFAR-100 (ViT)              & supervised  & $43.94 \pm 0.57$ & $43.85 \pm 0.57$ & $-0.16$ \\
 \bottomrule
 \end{tabular}
 
 \vspace{2pt}
-{\footnotesize MPE No Aux values approximate (see Appendix~\ref{app:tables}); CIFAR-100 is a single-seed probe per cell (Appendix~\ref{app:vision}).}
+{\footnotesize Final50 for MARL, Best test accuracy for CIFAR-100. MPE No Aux values approximate (see Appendix~\ref{app:tables}); CIFAR-100 is 5 seeds per cell, bootstrap CI on $d$ crosses zero on Best (Appendix~\ref{app:vision}). The large $d = {+}5.07$ on Cramped Room reflects that environment's unusually tight cross-seed std ($1.41$, $0.79$) rather than a larger mean gap ($\sim 6$ points). Hanabi absolute scores are low; the relative ordering rather than the magnitudes is the claim (Appendix~\ref{app:tables}).}
 \end{table}
 
-Table~\ref{tab:cross_env} summarizes the cross-environment picture.
 The pathology reproduces on all four cooperative-coordination
-benchmarks we tested, with effect sizes ranging from Cohen's $d =
-+1.26$ (SMAX 3v3) to $+5.07$ (Cramped Room) to $+2.81$ (Hanabi). It is
-absent on MPE simple\_spread and on supervised CIFAR-100
-(Appendix~\ref{app:vision}). Within Overcooked Cramped Room the
-pattern matches AA closely, with the No Attention cell showing a hint
-of harm (Cohen's $d = +0.58$, CI crossing zero;
-Appendix~\ref{app:tables}) that is cleanly resolved on Hanabi:
-both aux-ON cells (Full and No Attention) are pathological, both
-aux-OFF cells are healthy, and the 2$\times$2 pattern lacks the
-attention specificity seen on AA. Under the target-source reading,
-this is the expected gradient across environments: as teammate-policy
-drift and coordination difficulty grow, even mean-pool aux pathways
-become disruptive; on sparser-coordination settings (MPE) the drift is
-small enough that the aux is harmless, and in fully stationary
-supervised learning (CIFAR-100) the drift is zero and the aux is
-near-null. The bound in Proposition~\ref{prop:variance} formalizes
-this scaling: late-training variance grows with the temporal variance
-of the aux-gradient direction, which in turn grows with teammate
-co-learning drift.
+benchmarks ($d \in [+1.26, +5.07]$) and is absent on MPE and
+supervised CIFAR-100. On Hanabi the 2$\times$2 loses AA's
+attention specificity: both aux-ON cells are pathological, both
+aux-OFF healthy, consistent with partial information making even
+mean-pool aux disruptive. As teammate drift and coordination
+difficulty grow, more pathways become vulnerable; in stationary
+supervised learning the drift is zero and the aux is near-null.
+Proposition~\ref{prop:variance} formalizes this scaling.
 
 On SMAX, fix paths reduce cross-seed std but not the mean; halving
 $\lambda$ worsens Final50 ($10.18 \pm 0.35$ vs $10.60$ at $\lambda{=}0.05$),
 a non-monotonic response we flag as open (Appendix~\ref{app:tables}).
 
-\subsection{Architecture and $\lambda$ Generalization}
+\subsection{Generalization and budget artifact}
 \label{sec:arch_sweep}
-
-A 60-run architecture sweep (Appendix~\ref{app:arch_sweep}) finds
-the pathology reproduces with LSTM + cross-attention ($d=0.80$) and
-GRU + additive attention ($d=1.01$); mean pooling is immune
-($d=-0.30$); critic-side aux reverses the effect ($d=-0.79$). A
-3-point $\lambda$ sweep (Appendix~\ref{app:lambda}) finds a sweet
-spot at $\lambda{=}0.01$ rather than a monotonic threshold, and at
-50M steps both $\lambda{=}0.01$ and $\lambda{=}0.05$ retain std $>7$,
-so the pathology is not a transient of the 10M budget.
-
-\subsection{Training-budget artifact (secondary).}
 \label{sec:budget}
-A 6-method benchmark at 10M steps (Appendix~\ref{app:tables}) shows
-no method collapses at 10M; coordination collapse on AA drops from
-$\sim$46\% at 500K to $<$3\% at 10M. The residual instability we
-isolate is distinct from, and much smaller than, the widely reported
-collapse.
 
+A 60-run architecture sweep and a 3-point $\lambda$ sweep confirm
+generalization: the pathology reproduces with LSTM + cross-attention
+($d{=}0.80$) and GRU + additive attention ($d{=}1.01$), is absent
+under mean pooling ($d{=}-0.30$), reverses on critic-side aux
+($d{=}-0.79$), and at 50M steps retains cross-seed std $>7$ at both
+$\lambda{=}0.01$ and $\lambda{=}0.05$; a 6-method benchmark
+separately shows the widely-reported coordination collapse on AA
+drops from $\sim$46\% at 500K to $<$3\% at 10M steps, so our
+residual instability is distinct from that budget-artifact collapse
+(Appendices~\ref{app:arch_sweep},~\ref{app:lambda},~\ref{app:tables}).
 
-% ============================================================================
-\section{Discussion}
-\label{sec:discussion}
-% ============================================================================
-
-\paragraph{The mechanism, restated.}
-The target-source test and the $8{\times}$ capacity sweep together
-falsify capacity consumption: the pathway is necessary but not
-sufficient. Cohen's $d$ grows with the speed at which teammate
-policies drift (Table~\ref{tab:cross_env}): MPE's symmetric drift is
-near-null; SMAX and AA are moderate; Cramped Room and Hanabi are
-large, with Hanabi losing AA's clean $2{\times}2$ interaction because
-partial information makes even mean-pool aux disruptive.
-
-\paragraph{Relation to prior work.}
-BEPAL's oracle (stationary) targets are consistent with the principle;
-Dynamic Belief reports the same failure and fixes it via meta-learned
-dynamic context, while we identify the mechanism and show
-pathway-severing interventions work without meta-learning.
-Contemporaneous~\cite{weng2026exploration} identifies a distinct
-magnitude-driven pathology in parameter-shared DQN.
 
 
 
@@ -928,23 +828,25 @@ magnitude-driven pathology in parameter-shared DQN.
 \label{sec:limitations}
 % ============================================================================
 
-\textbf{Scope and assumptions.} The mechanism applies where auxiliary
-targets are both task-coupled and co-adaptive; stationary targets
-(CIFAR-100) and slow symmetric drift (MPE) fall outside scope and
-show no effect, as predicted. The analysis uses local linearization
-(quadratic loss, i.i.d.\ noise, first-order expansion in $\pi_j$),
-standard for first-order mechanistic models; $J_\pi$ and $\Sigma_\pi$
-are not directly observed, but the normalized cosine temporal std
-proxies $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$
-(Figure~\ref{fig:proxy}, Appendix~\ref{app:proxy}).
-
-\textbf{Empirical scale and future work.} 5 seeds per condition.
-Architecture sweep resolves at positive $d$ in 2 of 4 attention
-configs; Neither-vs-Full AA CI crosses zero; $\lambda$ sweep is 3
-points; sample-efficiency AA-only; CIFAR-100 single-seed; Hanabi
-absolute scores low. Drift-gated aux
-(\S\ref{sec:theory}), AERIAL gradient decomposition, and a
-separate-encoder VABL control are future work.
+The model is first-order (local quadratic loss, i.i.d.\ noise,
+linear expansion in $\pi_j$); $J_\pi$ and $\Sigma_\pi$ are not
+directly observed but are proxied by the normalized cosine
+temporal std (Figure~\ref{fig:proxy}). The bound is tightest in
+late training; colored-noise and mid-training extensions are in
+Appendix~\ref{app:theory_extended}. Two empirical patterns fall
+outside Proposition~\ref{prop:variance}'s scope and we flag as
+open: the critic-side aux reversal ($d = -0.79$,
+Appendix~\ref{app:arch_sweep}) shows routing $g_{\mathrm{aux}}$
+through the critic \emph{improves} stability, and on SMAX fix
+paths recover variance but not the mean gap (inconsistent with a
+purely zero-mean noise mechanism). 5 seeds per condition on all
+MARL cells and CIFAR-100; the architecture sweep resolves at
+positive $d$ in 2 of 4 configurations; absolute Hanabi scores are
+low despite clean relative ordering. Empirical evaluation of the
+drift-gated aux controller (\S\ref{sec:theory}) and of DG-PG's
+closed-form schedule~\cite{yang2026dgpg} it approximates, along
+with replication on BEPAL~\cite{huang2025bepal} and Dynamic
+Belief~\cite{zhai2023dynamic}, are immediate future work.
 
 
 % ============================================================================
@@ -952,11 +854,28 @@ separate-encoder VABL control are future work.
 \label{sec:conclusion}
 % ============================================================================
 
-Structured non-stationary aux targets inject directional noise
-dominating policy gradients near convergence; target-source and
-capacity controls rule out alternatives; CIFAR-100 and MPE nulls are
-the predicted boundary. Three gradient-pathway interventions recover
-stability on Overcooked.
+We identify a learning-dynamics principle in cooperative MARL:
+auxiliary targets that are both \emph{structured} and
+\emph{non-stationary} inject directional gradient noise that
+dominates policy gradients near convergence. The factorization
+$\Sigma_\varepsilon \approx J_\pi \Sigma_\pi J_\pi^\top$
+(Eq.~\eqref{eq:drift_to_noise}) and Proposition~\ref{prop:variance}
+tie late-training instability to upstream co-learning dynamics
+through measurable quantities. Target-source and $8{\times}$ capacity
+controls rule out alternatives; the cosine-std proxy orders
+conditions at $R^2 = 0.94$; the pathology reproduces on four
+cooperative benchmarks and two architecture classes, and disappears
+exactly where stationarity (CIFAR-100, $d = -0.16$) or symmetric
+drift (MPE, $d \sim 0$) predict. Three zero-cost gradient-pathway
+fixes recover stability.
+
+For practitioners: a constant aux weight on a task-coupled
+co-adaptive target is a late-training stability risk, not a free
+regularizer. The drift-gated aux controller
+(\S\ref{sec:theory}) approximates DG-PG's~\cite{yang2026dgpg}
+closed-form variance-optimal weight; its empirical evaluation,
+and extension to the critic-side reversal and SMAX residual mean
+gap, are natural next steps.
 
 
 % ============================================================================
@@ -971,6 +890,316 @@ stability on Overcooked.
 % ============================================================================
 \newpage
 \appendix
+
+\section{Extended Theory Discussion}
+\label{app:theory_extended}
+
+This appendix expands the compressed theory exposition in
+\S\ref{sec:theory}. It is the long-form version of material
+referenced but not stated in full in the main text, organized as
+follows.
+\S\ref{app:theory_linearization} specifies exactly when the
+first-order linearization $\varepsilon(t) \approx J_\pi
+(\pi_j^{(t)} - \bar\pi_j)$ is accurate, and why restricting the
+analysis window to the final $50\%$ of training is the correct
+regime for measuring the cosine-std proxy.
+\S\ref{app:theory_colored} extends Proposition~\ref{prop:variance}
+from the i.i.d.\ noise assumption used in the main body to colored
+noise with integrated autocorrelation time $\tau_c$, showing that
+$\tau_c$ enters as a multiplicative factor on the bound without
+changing its functional form.
+\S\ref{app:theory_lambda_scope} states precisely why the
+$\lambda^2$ variance scaling is a local rather than a global
+prediction, and documents the measured non-monotonicity of the
+3-point $\lambda$ sweep.
+\S\ref{app:theory_jpi} unpacks what $J_\pi$ represents in a VABL
+architecture: the encoder-subspace column through
+attention/GRU/$\phi_\theta$ by which teammate one-hot inputs
+influence aux-head predictions, and why each fix path (mean
+pooling, stop-gradient, critic-side placement) drives this
+projection toward zero.
+\S\ref{app:theory_scope} collects the six scope limits and open
+questions at the end of the main-body theory section in fully
+expanded form, including the SMAX residual mean gap, the
+critic-side reversal, and the proxy-plot categorical structure.
+\S\ref{app:theory_related_formalisms} places our theory objects
+alongside five recent gradient-interference and non-stationarity
+formalisms (COALA-PG, DG-PG, ROCKET, GAC, Trust-Region
+Decomposition) and states precisely which formal assumptions our
+setting violates relative to each.
+
+\subsection{Linearization, locality, and the analysis window}
+\label{app:theory_linearization}
+
+The first-order expansion $\varepsilon(t) \approx J_\pi (\pi_j^{(t)}
+- \bar\pi_j)$ is exact when the teammate policy stays within a small
+neighborhood of the time-averaged policy $\bar\pi_j$ over the
+analysis window. Formally, write $g_{\mathrm{aux}}(t) =
+g_{\mathrm{aux}}(\bar\pi_j) + J_\pi \Delta_t +
+\mathcal{O}(\|\Delta_t\|^2)$ with $\Delta_t = \pi_j^{(t)} -
+\bar\pi_j$; the drop-to-noise factorization
+$\Sigma_\varepsilon \approx J_\pi \Sigma_\pi J_\pi^\top$ is
+accurate to $\mathcal{O}(\|\Delta\|^3)$ in the window's maximal
+drift. Restricting to the final $50\%$ of training is important
+because policy convergence implies smaller per-iteration drift, so
+the linearization is tightest precisely where we measure the
+cosine-std proxy. Mid-training, where the worst cross-seed
+instability actually occurs, the linearization is less tight, so
+the theory's quantitative predictions are most useful for
+late-training equilibrium behavior and qualitative for mid-training
+transients.
+
+\subsection{Colored-noise correction to Proposition~\ref{prop:variance}}
+\label{app:theory_colored}
+
+Proposition~\ref{prop:variance} treats $\varepsilon(t)$ as i.i.d.\
+to obtain a clean closed-form bound. Real $\varepsilon(t)$ is
+autocorrelated because consecutive teammate policies differ by a
+single gradient step, so $\pi_j^{(t+1)}$ and $\pi_j^{(t)}$ are
+close in parameter space. Let $\tau_c = \sum_{k=0}^{\infty}
+\rho_\varepsilon(k)$ denote the integrated autocorrelation time of
+$\varepsilon$, where $\rho_\varepsilon(k) = \mathrm{Cov}[\varepsilon(t),
+\varepsilon(t+k)] / \mathrm{Var}[\varepsilon(t)]$. For an AR(1)
+approximation with decay rate $\phi \in [0,1)$, $\tau_c =
+(1+\phi)/(1-\phi)$. The steady-state bound becomes
+\begin{equation}
+    \mathbb{E}[\|\delta\|^2]_{\mathrm{colored}}
+    \;\propto\;
+    \tau_c \cdot
+    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
+         {\lambda_{\min}(H)}.
+    \label{eq:colored_bound}
+\end{equation}
+The dependence on $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ and
+$\lambda_{\min}(H)$ is unchanged; $\tau_c$ enters as a
+multiplicative factor that can be large for fast-learning teammates
+(AR(1) with $\phi$ close to $1$). This means the i.i.d.\ bound may
+underestimate absolute variance substantially, but the
+\emph{ordering} across conditions is preserved under any uniform
+$\tau_c$.
+
+\subsection{Scope of the $\lambda$ prediction}
+\label{app:theory_lambda_scope}
+
+Since $g_{\mathrm{aux}} \propto \lambda$ by construction, the
+first-order bound predicts displacement variance $\propto \lambda^2$.
+Our 3-point $\lambda$ sweep (Appendix~\ref{app:lambda}) is
+\emph{not} monotonic: Final50 std at $\lambda \in \{0.001, 0.01,
+0.05\}$ is $\{6.37, 1.67, 8.55\}$ respectively. The bound holds
+locally (variance increases from $\lambda = 0.01$ to $\lambda =
+0.05$) but fails across the full range because aux-head
+representations co-adapt with $\lambda$: at very small $\lambda$
+the aux head receives too little signal to organize its
+representation, so $J_\pi$ itself becomes a function of $\lambda$
+in a way the first-order analysis does not capture. The prediction
+should be read as ``within a $\lambda$ range where the aux-head
+representation is qualitatively unchanged,'' not as a global claim.
+
+\subsection{Interpreting $J_\pi$ in VABL}
+\label{app:theory_jpi}
+
+$J_\pi$ is the sensitivity of the aux gradient to the teammate
+action distribution, evaluated around $\bar\pi_j$. In VABL its
+column space coincides with the pathway through
+attention/GRU/$\phi_\theta$ by which teammate one-hot inputs
+influence aux-head predictions. It is large when the aux head is
+tightly tuned to the current teammate, and small when the encoder
+is structurally insensitive: mean pooling collapses heterogeneous
+teammates onto a single mean vector, so different teammate
+identities produce identical contexts; stop-gradient on $b_t^i$
+cuts the encoder-side coupling while leaving the aux MLP trainable;
+critic-side placement routes $g_{\mathrm{aux}}$ through the critic
+parameters entirely, so the actor encoder never receives the aux
+signal. All three interventions drive the \emph{encoder-subspace}
+projection of $J_\pi$ toward zero without eliminating the aux loss
+itself.
+
+\subsection{Open questions and scope limits}
+\label{app:theory_scope}
+
+The main text compresses six caveats to the first-order model;
+this section states each in full.
+\textbf{(i) Autocorrelation.} The i.i.d.\ noise assumption gives
+the variance-scaling \emph{shape} but not absolute magnitude;
+colored-noise correction (Appendix~\ref{app:theory_colored})
+multiplies the bound by $\tau_c$.
+\textbf{(ii) Local-quadratic approximation.} The bound is tightest
+in late training where drift is smallest, which is also where the
+pathology is least severe; it applies less tightly mid-training
+where the worst cross-seed instability actually occurs.
+\textbf{(iii) Proxy--variance ordering.} The $R^2 = 0.94$ fit
+(Figure~\ref{fig:proxy}) is dominated by the categorical separation
+between Full (non-zero proxy) and the three pathway-zero
+conditions. The plot verifies ordering more than slope.
+\textbf{(iv) Critic-side reversal.} The theory explains how
+severing $J_\pi$ in the encoder subspace eliminates encoder-side
+directional interference but says nothing about what happens when
+$g_{\mathrm{aux}}$ is routed through the critic. The critic-side
+reversal we observe ($d = -0.79$, Appendix~\ref{app:arch_sweep})
+falls outside the scope of Proposition~\ref{prop:variance}.
+\textbf{(v) SMAX residual mean gap.} Fix paths recover variance
+but not mean on SMAX; this is inconsistent with a purely zero-mean
+directional-noise mechanism (symmetric oscillation should not bias
+the mean). Either a secondary pathology coexists in SMAX or the
+zero-mean assumption of $\varepsilon(t)$ is too strong there.
+\textbf{(vi) $\lambda$ non-monotonicity.} The monotonic-$\lambda$
+prediction fails globally because aux-head representations co-adapt
+with $\lambda$, making $J_\pi$ itself $\lambda$-dependent
+(Appendix~\ref{app:theory_lambda_scope}).
+
+\subsection{Relation to other gradient-interference formalisms}
+\label{app:theory_related_formalisms}
+
+Our theory sits at a specific axis within a broader literature of
+gradient-interference and non-stationarity diagnostics; related
+formal objects are listed below.
+
+\textbf{DG-PG exogeneity assumption~\cite{yang2026dgpg}.} Their
+framework treats a guidance term $G$ with reference trajectory
+$\tilde{x}_t$ satisfying $\nabla_\theta \tilde{x}_t = 0$
+(Assumption 3.1) as a variance-reduction signal for cooperative
+MARL. Their Theorem 4.2 then gives the closed-form optimal
+combining weight
+\begin{equation}
+    \min_{\alpha \in (0,1)} \mathrm{Var}(\hat{g}^i_{\mathrm{DG}})
+    = \frac{\sigma_J^2 \sigma_G^2 (1 - \rho^2)}
+           {\sigma_J^2 + \sigma_G^2 + 2\rho\,\sigma_J\sigma_G},
+\end{equation}
+where $\sigma_J^2, \sigma_G^2$ are the variances of the
+policy-gradient and guidance-gradient estimators and $\rho$ is
+their correlation. In our setting the aux target is the teammate's
+action, which depends on the teammate's co-evolving policy
+($\nabla_\theta \tilde{x}_t \neq 0$). Assumption~3.1 is violated,
+which is precisely why $\Sigma_\varepsilon$ is driven by
+$\Sigma_\pi$ rather than collapsing. Reading $\hat{g}_J = g_\pi$,
+$\hat{g}_G = g_{\mathrm{aux}}$, $\rho = \mathbb{E}_t[\cos]$, the
+DG-PG formula prescribes an optimal $\alpha^*(t)$ that our
+drift-gated aux controller approximates by binary gating.
+
+\textbf{COALA-PG batched meta-POMDP~\cite{meulemans2024coala}.}
+Meulemans et al.\ formalize cooperative-MARL learning as a
+batched co-player shaping POMDP whose meta-state is the joint
+parameter vector $(\phi^i, \phi^{-i})$. The distribution over
+meta-trajectories induced by the meta-dynamics is the rigorous
+object that our $\Sigma_\pi$ informally approximates.
+
+\textbf{Trust-Region Decomposition~\cite{li2022trustregion}.} Li
+et al.\ introduce $\delta$-stationarity, an explicit
+non-stationarity measure bounded by the KL-divergence of
+consecutive joint policies. When we say ``teammate policy drift,''
+this is the formal quantity being measured; the KL bound gives an
+upper estimate on $\mathrm{tr}(\Sigma_\pi)$ in natural parameter
+coordinates.
+
+\textbf{ROCKET cross-layer interference~\cite{sun2026rocket}.} Sun
+et al.\ analyze gradient interference in multi-layer representation
+alignment, decomposing the squared gradient norm as
+$\|G\|^2 = \sum_l \alpha_l^2 \|v_l\|^2 +
+\sum_{a \neq b} \alpha_a \alpha_b \langle v_a, v_b \rangle$, where
+$\langle v_a, v_b \rangle = g_a^\top M_{ab} g_b$ is a bilinear
+form on teacher-error signals. Their cross-term is the
+static (cross-layer) analog of our temporal cross-term: both
+identify $\langle g_a, g_b \rangle$ structure as the source of
+conflict, and both propose structural constraints (shared projector
+for ROCKET, stop-gradient for us) that eliminate the conflict
+without weight tuning.
+
+\textbf{GAC consecutive-step cosine~\cite{xu2026gac}.} Xu et al.\
+diagnose asynchronous LLM RL instability via the consecutive-step
+cosine $c_t = \langle g_t, g_{t-1} \rangle / (\|g_t\|\|g_{t-1}\|)$
+of a single gradient stream. This is a temporal
+autocorrelation-at-lag-1; our $\cos(g_\pi, g_{\mathrm{aux}})$ is a
+cross-correlation at lag-0. Both are cosine-based first-order
+diagnostics and share the ``late-window temporal std'' estimation
+pattern, but diagnose different instabilities: theirs is staleness
+across async workers, ours is structured-target interference within
+a single worker.
+
+
+\section{Methodology Details}
+\label{app:method_details}
+
+This appendix expands the compressed methodology descriptions in
+\S\ref{sec:method}, preserving specifics trimmed for the page
+limit.
+\S\ref{app:method_targets} gives the full specification of the
+target-source distinguishing test, including the procedure used to
+construct frozen-policy targets from an iteration-0 random-init
+snapshot, the uniform-random resampling protocol, and the
+predictions each target source makes under the capacity-consumption
+versus directional-interference hypotheses.
+\S\ref{app:method_baselines} describes each baseline
+(MAPPO, TarMAC, CommNet, AERIAL) with the paradigm it exemplifies,
+documents the shared JAX/JaxMARL reimplementation and
+hyperparameter matching that make cross-method differences
+interpretable, and explains why these baselines support the
+training-budget-artifact claim rather than serving as controls for
+the core mechanism (no baseline instantiates the attention +
+teammate-prediction-aux design pattern).
+
+\subsection{Target-source distinguishing test: full specification}
+\label{app:method_targets}
+
+The test compares Full VABL with three alternative aux-target
+sources, holding aux network, capacity, and the aux-to-encoder
+gradient pathway identical across conditions:
+
+\begin{itemize}
+\item \textbf{Teammate co-learning (Full).} Standard VABL: the
+aux target for step $t+1$ is the actual teammate action
+$a_{t+1}^j$. Targets are both \emph{structured} (come from a real
+policy) and \emph{non-stationary} (drift with teammate co-learning).
+\item \textbf{Frozen-policy targets.} At iteration~0 we snapshot
+the initial (random-init) agent parameters as $\theta_0$ and
+freeze them. At each subsequent iteration, the aux target for step
+$t+1$ is $\arg\max_a \pi_{\theta_0}(a \mid o_{t+1}^j)$ applied to
+the observed rollout state, rather than the teammate's actual
+action. Targets are \emph{stationary} (no drift with teammate
+co-learning) but remain \emph{structured} (from a real policy).
+Realizes the $\Sigma_\pi \to 0$ limit.
+\item \textbf{Uniform random targets.} The aux target for step
+$t+1$ is an integer drawn uniformly at random from
+$\{0, \ldots, |\mathcal{A}| - 1\}$, resampled each iteration.
+Targets are \emph{stationary in expectation} and
+\emph{unstructured} (no co-learning signal, no semantic coupling
+to teammates). Realizes the $J_\pi \to 0$ limit.
+\end{itemize}
+
+All three interventions leave aux capacity, architecture, gradient
+pathway, and loss form identical to Full; they vary \emph{only}
+the source and structure of the aux target. The
+capacity-consumption hypothesis predicts all three conditions to
+be pathological. The directional-interference hypothesis predicts
+recovery scaled by residual structure: none for Full, partial for
+frozen (structured but stationary), full for random (neither
+structured nor non-stationary).
+
+\subsection{Baselines: full description and comparability rationale}
+\label{app:method_baselines}
+
+We compare against four methods spanning three paradigms:
+\textbf{MAPPO}~\cite{yu2022surprising} (decentralized policy
+gradient, centralized critic),
+\textbf{TarMAC}~\cite{das2019tarmac} (targeted
+attention-based communication),
+\textbf{CommNet}~\cite{sukhbaatar2016commnet} (broadcast
+communication), and \textbf{AERIAL}~\cite{phan2023attention}
+(attention over teammate hidden states; our port uses PPO for
+comparability, the original is QMIX-based). All baselines are
+reimplemented in JAX~\cite{bradbury2018jax} using
+JaxMARL~\cite{rutherford2024jaxmarl} with matched hyperparameters,
+env wrapper, and evaluation protocol, so cross-method differences
+reflect algorithmic choices rather than infrastructure drift.
+These baselines support the training-budget-artifact claim
+(\S\ref{sec:budget}) because none exhibits the attention +
+teammate-prediction-aux design pattern, so they are not controls
+for the core mechanism. Direct re-implementation of Dynamic
+Belief~\cite{zhai2023dynamic} or BEPAL~\cite{huang2025bepal},
+which do instantiate the pattern, would be a stronger external
+comparison and is left to future work; we rely instead on
+Zhai et al.'s independently-reported Static-Belief failure mode as
+external corroboration (\S\ref{sec:related}).
+
 
 \section{Full Proof of Proposition~\ref{prop:variance}}
 \label{app:proof}
@@ -1026,35 +1255,46 @@ Transformer~\cite{dosovitskiy2020image} (4 layers, 192 dim, 4 heads,
 patch size~4) and a RotNet auxiliary head~\cite{gidaris2018unsupervised}
 (4-way rotation prediction), using the same
 $\lambda = 0.05$ constant weight. Each configuration is trained for 200
-epochs with AdamW~\cite{loshchilov2019adamw} (lr$=3{\times}10^{-4}$, cosine schedule) on a single GPU.
+epochs with AdamW~\cite{loshchilov2019adamw} (lr$=3{\times}10^{-4}$,
+cosine schedule) on a single GPU, with 5 seeds per cell.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
-\caption{CIFAR-100 cross-domain test (1 seed per config). The auxiliary loss
-has negligible effect ($<0.5$ points) on either architecture. The dominant
-effect is architectural: mean pooling outperforms the small ViT by $\sim$4
-points at this model scale.}
+\caption{CIFAR-100 cross-domain test, 5 seeds per configuration (mean $\pm$ std). The auxiliary loss has no resolvable effect on Best test accuracy at either encoder; the dominant effect is architectural (mean pooling outperforms the small ViT by $\sim$4 points at this model scale).}
 \label{tab:vision}
 \small
-\begin{tabular}{lcccc}
+\begin{tabular}{lccccc}
 \toprule
-Config & Encoder & Aux & Best & Final5 \\
+Config & Encoder & Aux & Best & Final5 & $d$ vs Full (Best) \\
 \midrule
-Full & ViT & \checkmark & 43.90 & 42.89 \\
-No Aux & ViT & -- & 43.47 & 42.96 \\
-No Attn & mean pool & \checkmark & 48.02 & 47.34 \\
-Neither & mean pool & -- & 48.06 & 47.08 \\
+Full    & ViT       & \checkmark & $43.94 \pm 0.57$ & $42.78 \pm 0.31$ & -- \\
+No Aux  & ViT       & --         & $43.85 \pm 0.57$ & $43.18 \pm 0.42$ & $-0.16$ \\
+No Attn & mean pool & \checkmark & $47.89 \pm 0.13$ & $47.08 \pm 0.29$ & $+9.59$ \\
+Neither & mean pool & --         & $47.99 \pm 0.14$ & $46.83 \pm 0.22$ & $+9.82$ \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-The $2 \times 2$ shows no interaction: $\Delta_{\mathrm{aux}}$ (Final5
-with aux $-$ without aux) is $-0.07$ (ViT) and $+0.26$ (mean pool), both
-within noise.
-Proposition~\ref{prop:variance} predicts this: in supervised learning,
-$\Sigma_\varepsilon \to 0$ as the auxiliary predictor converges against
-a fixed target, so the steady-state variance from Eq.~\eqref{eq:variance_bound}
-vanishes regardless of the encoder type.
+\paragraph{Result.}
+The primary stationarity prediction is that Full$\approx$No~Aux when
+the aux target is stationary. On Best test accuracy this holds at 5
+seeds: Full $43.94 \pm 0.57$ vs No Aux $43.85 \pm 0.57$ (Cohen's
+$d = -0.16$, bootstrap 95\% CI $[-1.78, +1.19]$ crosses zero). The
+Full-vs-No~Aux gap is $< 0.1$ points, two orders of magnitude smaller
+than the MARL gap on cooperative tasks (Table~\ref{tab:cross_env}).
+On Final5 we measure a small positive effect in favor of No Aux ($0.4$
+points, $d = +1.09$, CI $[+0.04, +2.76]$), plausibly reflecting a
+brief end-of-training oscillation from the aux signal; the magnitude
+is negligible relative to the $8$--$34$ point Best-to-Final50 drops
+observed in MARL. Both cells with mean pooling are $\sim$4 points
+above both cells with attention, so the $2 \times 2$ is dominated by
+the encoder axis rather than by any aux-loss interaction.
+
+Proposition~\ref{prop:variance} predicts this: with stationary
+targets the target-generating policy has drift covariance
+$\Sigma_\pi = 0$, so $\Sigma_\varepsilon = J_\pi \Sigma_\pi J_\pi^\top = 0$
+and the steady-state variance from Eq.~\eqref{eq:variance_bound}
+vanishes regardless of encoder type.
 
 
 \section{Additional Tables and Per-Seed Data}
@@ -1071,7 +1311,7 @@ the aux-to-encoder pathway we isolate in VABL is not present; we do
 not claim our mechanism explains AERIAL's drop. Per-seed trajectories
 in Table~\ref{tab:aerial_per_seed}.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Per-seed AERIAL trajectories on Overcooked AA (10M steps).}
 \label{tab:aerial_per_seed}
@@ -1097,7 +1337,7 @@ in Table~\ref{tab:aerial_per_seed}.
 
 \paragraph{6-method benchmark (Overcooked AA and Cramped Room).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{6-method benchmark at 10M steps (5 seeds each). VABL uses the best ablation config (No Aux). All methods on Cramped Room saturate at the ceiling. Communication methods lead on AA in mean but with cross-seed std $>148$, more than $40\times$ VABL's. These baselines support the training-budget-artifact finding; they are not controls for the pathway-specific pathology.}
 \label{tab:benchmark}
@@ -1125,7 +1365,7 @@ VABL (Full, pathology) & no & 463.21 & 8.55 & 409.70 & 1.41 \\
 
 \paragraph{6-method benchmark figure (Overcooked AA).}
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.85\textwidth]{figures/neurips/f3_benchmark.pdf}
 \caption{6-method benchmark on Overcooked AA at 10M steps. Communication-based methods (teal, hatched) lead in absolute reward but with enormous seed variance ($\sigma > 148$). VABL (purple) has the tightest variance of any method ($\sigma < 4$). Data from Table~\ref{tab:benchmark} in the main body.}
@@ -1139,7 +1379,7 @@ compute non-parametric bootstrap 95\% confidence intervals for each
 configuration vs. Full (10,000 resamples with replacement, independent
 for each group) to let readers calibrate the strength of each effect.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{lcccc}
@@ -1175,7 +1415,7 @@ population estimator for consistency with prior camera-ready drafts.}
 
 \paragraph{$2 \times 2$ interaction table (Overcooked AA).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{lcc}
@@ -1192,7 +1432,7 @@ The pathology occupies only the attention + aux-ON cell.}
 
 \paragraph{Per-seed Final50 (Overcooked AA, 7 configurations).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{lccccc}
@@ -1215,7 +1455,7 @@ range (23.6) is $>3\times$ every alternative's.}
 
 \paragraph{SMAX 3v3 ablation (4 configurations, 5 seeds).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{lcccc}
@@ -1243,7 +1483,7 @@ rather than merely destabilizing.}
 
 \paragraph{Hanabi 2-player per-seed data (5 seeds per config, 25K episodes, horizon 80).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{Per-seed Hanabi Final50 and peak score. Non-zero episode count (\% of 25,024 episodes scoring non-zero reward) indicates training stability: Aux-ON cells (Full, No Attn) spend most episodes at 0, while Aux-OFF cells (No Aux, Neither) sustain positive scoring. Seed 3 of Full scores only 1 non-zero episode in 25K; this is a complete training collapse, not a gradual drift.}
@@ -1282,7 +1522,7 @@ Neither    & 4 & $0.02$ & 7.0 & $0.1\%$ \\
 
 \paragraph{Gradient decomposition per-seed detail (Full VABL + fix paths, 5 seeds).}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{Per-seed gradient decomposition statistics on Overcooked AA. Cosine std is over the late 50\% of training iterations (8 log points per seed, logged every 25 iterations). $\|g_\pi\|$ and $\|g_{\mathrm{aux}}\|$ are means over logged iterations. Under No Aux the aux gradient is identically zero; under Stop-grad and late-stage Anneal the aux gradient has zero projection onto policy-gradient-receiving parameters (disjoint param supports), giving cosine exactly zero by construction. Only Full exhibits non-zero cosine temporal variance, consistent with directional aux-policy conflict.}
@@ -1310,7 +1550,7 @@ Anneal    & all & $0.000^\dagger$ & $0.000^\dagger$ & $0.115$--$0.143$ & $0.004$
 
 \paragraph{Cross-environment per-seed summary.}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{Per-seed Final50 across four MARL environments and both primary configs (Full vs No Aux). Seed columns are the 5 independent runs per cell; $d$ column is Cohen's $d$ (No Aux vs Full, pooled sample std).}
@@ -1339,12 +1579,55 @@ Hanabi    & No Aux & 3.64   & 0.80   & 3.34   & 4.06   & 2.20   & 2.81   & $+2.8
 \section{Proxy--Variance Plot}
 \label{app:proxy}
 
-\begin{figure}[h]
+This appendix supports the ``From cosine to proxy'' paragraph in
+\S\ref{sec:theory}. Recall that linearizing $\cos(g_\pi,
+g_{\mathrm{aux}})$ at fixed norms gives
+$\mathrm{Var}_t[\cos] \approx \hat g_\pi^\top \Sigma_\varepsilon
+\hat g_\pi / \|\bar g_{\mathrm{aux}}\|^2$, so the cosine temporal
+standard deviation is a finite-sample proxy for normalized
+$\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)^{1/2}$. If the theory is
+correct, this proxy should predict the Final50 cross-seed standard
+deviation ordering.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.65\textwidth]{figures/neurips/f_proxy_variance.pdf}
 \caption{Cosine temporal std (proxy for $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$ normalized by gradient magnitudes) vs Final50 cross-seed std across four logged conditions on Overcooked AA. Three zero-proxy conditions reach zero by pathway construction; Full is the only condition with non-zero proxy and has elevated variance. Linear $R^2 = 0.94$ across conditions; the ordering is the main prediction, not the slope.}
 \label{fig:proxy}
 \end{figure}
+
+\paragraph{How to read the plot.}
+Each point is one of the four logged conditions from ExpB (Full,
+No Aux, Stop-grad, Anneal), aggregated over 5 seeds. The $x$-axis
+is the cosine temporal standard deviation measured in the late
+$50\%$ training window; the $y$-axis is the Final50 cross-seed
+standard deviation. Three of the four conditions have proxy
+\emph{exactly zero} by construction: No~Aux has no aux gradient so
+$g_{\mathrm{aux}} = 0$; Stop-grad severs the encoder-subspace
+projection of $J_\pi$; Anneal drives $\lambda \to 0$ in the late
+window. Only Full retains a non-zero proxy, and it is the only
+condition with elevated Final50 variance.
+
+\paragraph{What the fit verifies.}
+The $R^2 = 0.94$ linear fit confirms the ordering prediction: the
+condition with non-zero proxy ($J_\pi \cdot \Sigma_\pi$ both
+non-zero) has the highest cross-seed variance, and the three
+conditions with zero proxy cluster together at low variance. Since
+three of four $x$-values are identically zero, the fit is
+dominated by the categorical separation rather than a continuous
+slope. Within Full's 5 seeds, per-seed cosine std correlates with
+per-seed peak-to-Final50 drop at $r = +0.40$, in the predicted
+direction but weak at $n = 5$.
+
+\paragraph{Scope.}
+The proxy is a first-order approximation and shares the scope
+limits of Proposition~\ref{prop:variance}
+(Appendix~\ref{app:theory_scope}). In particular, the
+normalization by $\|\bar g_{\mathrm{aux}}\|^2$ means the proxy
+measures the \emph{direction} of the aux gradient relative to the
+policy gradient, not the aux gradient's absolute energy; a condition
+with a large-magnitude but direction-stable aux gradient would read
+as low proxy without necessarily being free of interference.
 
 
 \section{Synthetic Verification of Proposition~\ref{prop:variance}}
@@ -1360,7 +1643,7 @@ the environment-dependent threshold (``Overcooked'' vs ``MPE'' analogs) all
 behave as the proposition predicts. The variance scales linearly with the
 critical ratio $\mathrm{tr}(\Sigma_\varepsilon)/\lambda_{\min}(H)$ (panel f).
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/neurips/f8_synthetic.pdf}
 \caption{Synthetic verification of Proposition~\ref{prop:variance} on a
@@ -1379,7 +1662,7 @@ while ``MPE'' analog (low $\Sigma_\varepsilon$, high $H$) is stable.}
 We run the 4-config ablation at four training budgets (500K, 2.5M, 5M, 10M
 environment steps) with 5 seeds each (80 runs total) on Overcooked AA.
 
-\begin{figure}[h]
+\begin{figure}[H]
 \centering
 \includegraphics[width=\textwidth]{figures/neurips/f7_sample_efficiency.pdf}
 \caption{Sample-efficiency curves. \textbf{(a)}~All configurations converge
@@ -1390,7 +1673,7 @@ at 10M; the pathology is transient, not a convergence-level effect.}
 \label{fig:sample_efficiency}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{Sample-efficiency: Final50 mean $\pm$ std (5 seeds) at each budget.}
@@ -1416,7 +1699,7 @@ values ($\lambda{=}0.01$ and $\lambda{=}0.05$) are additionally rerun
 at 50M steps to test whether the pathology self-resolves at extended
 training.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{$\lambda$ sensitivity on Overcooked AA (Full VABL, 5 seeds).
@@ -1439,7 +1722,7 @@ $0.05$  & 50M & $470.95$ & $7.46$ & $485.00$ & $0.00$ \\
 \end{tabular}
 \end{table}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \caption{Per-seed Final50 for the $\lambda$ sweep at 10M on Overcooked
@@ -1478,7 +1761,7 @@ Each configuration is run with and without the auxiliary loss (5 seeds
 each, 60 runs total). A MAAC-style variant places the auxiliary head on the
 centralized critic instead of the actor.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{Architecture sweep on Overcooked AA (25K episodes, 5 seeds each).
 Cohen's $d$: positive means aux hurts. The pathology generalizes across
@@ -1526,7 +1809,7 @@ Belief's~\cite{zhai2023dynamic} architectural signature with its KL
 weight $\beta = 0.005$), we run the $2 \times 2$ ablation on
 Overcooked AA at 10M steps, 5 seeds each.
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \caption{VAE-belief $2 \times 2$ ablation on Overcooked AA (5 seeds; Dynamic-Belief-style reparameterization with $\beta=0.005$). Cross-seed std is one to two orders of magnitude larger than the GRU-belief equivalents (Table~\ref{tab:ablation}); the test is underpowered to resolve the pathology signal.}
 \label{tab:vae_belief}
@@ -1562,10 +1845,102 @@ dynamics here; a VAE-specific study would be needed to characterize
 them. The main paper does not rely on this experiment.
 
 
+\section{Environments, Baselines, and Metrics}
+\label{app:env_baselines_metrics}
+
+This appendix expands \S\ref{sec:method}'s parenthetical summary of
+the experimental infrastructure.
+
+\subsection{Environments}
+\label{app:env_specs}
+
+We evaluate four MARL environments via
+JaxMARL~\cite{rutherford2024jaxmarl} and one supervised control.
+
+\textbf{Overcooked}~\cite{carroll2019utility}: \emph{Asymmetric
+Advantages} and \emph{Cramped Room}, 2 agents, horizon 400,
+25{,}024 episodes ($\approx$10M steps), 64 vectorized envs.
+
+\textbf{Hanabi 2-player}~\cite{bard2020hanabi}: turn-based
+partial-information card game, horizon 150 (re-run from an initial
+$h{=}80$ pilot that truncated games), 25K episodes.
+
+\textbf{MPE simple\_spread}~\cite{lowe2017multi}: 3 symmetric
+agents, horizon 25, 100K episodes.
+
+\textbf{SMAX 3v3}~\cite{rutherford2024jaxmarl}: 3 allies versus 3
+heuristic enemies, horizon 100, 50K episodes, covering both
+SMAC~\cite{samvelyan2019starcraft} and SMAC
+v2~\cite{ellis2023smacv2} scenarios (tactical combat).
+
+\textbf{CIFAR-100}~\cite{krizhevsky2009learning} (supervised
+control): small Vision Transformer~\cite{dosovitskiy2020image}
+(4 layers, 192 dim, 4 heads, patch size 4) with a RotNet auxiliary
+head~\cite{gidaris2018unsupervised} (4-way rotation prediction),
+$\lambda = 0.05$ constant, 200 epochs, AdamW with cosine schedule.
+
+\subsection{Baselines}
+\label{app:baselines_full}
+
+We compare against four methods spanning three paradigms.
+
+\textbf{MAPPO}~\cite{yu2022surprising}: decentralized policy
+gradient with centralized critic; the standard cooperative-MARL
+baseline.
+
+\textbf{TarMAC}~\cite{das2019tarmac}: targeted attention-based
+inter-agent communication.
+
+\textbf{CommNet}~\cite{sukhbaatar2016commnet}: broadcast
+communication via hidden-state averaging.
+
+\textbf{AERIAL}~\cite{phan2023attention}: attention over teammate
+hidden states; our port uses PPO for comparability with the rest of
+the matrix, whereas the original is QMIX-based.
+
+All baselines are reimplemented in JAX~\cite{bradbury2018jax} using
+JaxMARL~\cite{rutherford2024jaxmarl} with matched hyperparameters,
+env wrapper, and evaluation protocol, so cross-method differences
+reflect algorithmic choices rather than infrastructure drift. None
+of these baselines instantiates the attention + teammate-prediction-aux
+design pattern; they therefore support the training-budget-artifact
+claim (\S\ref{sec:budget}) but do not serve as controls for the
+core mechanism. Direct re-implementation of Dynamic
+Belief~\cite{zhai2023dynamic} or BEPAL~\cite{huang2025bepal}, which
+do instantiate the pattern, is left to future work; we rely on
+Zhai et al.'s independently-reported Static-Belief failure mode as
+external corroboration (\S\ref{sec:related}).
+
+\subsection{Metrics}
+\label{app:metrics_full}
+
+\begin{itemize}
+    \item \textbf{Best}: maximum episode reward (or maximum test
+    accuracy in the supervised control) achieved during training.
+    \item \textbf{Final50} (MARL) / \textbf{Final5} (vision): mean
+    of the last 50 episodes (or last 5 epochs), capturing the
+    policy's stable convergence level.
+    \item \textbf{Collapse \%}:
+    $({\mathrm{Best} - \mathrm{Final}}) / {\mathrm{Best}} \times 100$,
+    used only when discussing the broader literature's
+    coordination-collapse framing.
+    \item \textbf{Cross-seed std}: population standard deviation
+    across the 5 random seeds per cell; the headline stability
+    metric for our pathology.
+    \item \textbf{Cohen's $d$}~\cite{cohen1988statistical} with
+    bootstrap 95\% confidence intervals ($n_{\mathrm{boot}} =
+    10{,}000$) for effect-size comparisons. A CI that crosses zero
+    signals a non-resolvable effect at $n=5$.
+\end{itemize}
+
+All MARL numbers report mean $\pm$ std over 5 random seeds unless
+otherwise noted.
+
+
 \section{Hyperparameters}
 \label{app:hyperparams}
 
-\begin{table}[h]
+\begin{table}[H]
 \centering
 \small
 \begin{tabular}{ll}
@@ -1592,9 +1967,24 @@ Horizon (SMAX) & 100 \\
 \end{table}
 
 
-\section{Figure Accessibility}
+\section{Figure and Reader Accessibility}
 \label{app:accessibility}
 
+\paragraph{Reader accessibility.}
+The paper is structured for a reviewer scan: the title
+opens with a curiosity prompt before stating the mechanism; the
+abstract puts problem, mechanism, and what-the-failure-is-not in
+three citation-free sentences; an italicized one-line principle
+closes the first intro paragraph; Figure~\ref{fig:causal_chain}
+gives a five-box conceptual chain (teammate updates $\to \Sigma_\pi
+\to J_\pi \to \Sigma_\varepsilon \to$ instability) before any math;
+contributions are a scannable bulleted list with noun-phrase labels;
+and the Theory section opens with a plain-language intuition
+sentence before the four-step outline. Numeric thresholds and
+bootstrap CIs are deferred from the introduction to Methodology and
+Results, where they carry their full meaning.
+
+\paragraph{Figure accessibility.}
 All figures in this paper are designed for accessibility across viewing
 conditions. One author has color vision deficiency, which motivated a
 systematic approach to figure design:
@@ -1638,6 +2028,6 @@ Relying solely on color to distinguish data series excludes these readers.
 % NeurIPS Paper Checklist (must be the final section per submission policy)
 % ============================================================================
 \newpage
-% \input{checklist_filled}  % re-enable when checklist_filled.tex is present
+\input{checklist_filled}
 
 \end{document}
