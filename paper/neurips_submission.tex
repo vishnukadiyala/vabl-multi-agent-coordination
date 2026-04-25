@@ -75,9 +75,9 @@ varies only the target: co-learning teammate targets are
 pathological ($463 \pm 9$, $d = +1.40$ vs No Aux with bootstrap CI
 above zero); frozen-initial-policy targets (structured but stationary)
 and uniform random targets (unstructured, stationary) are both
-statistically indistinguishable from the No Aux regime at $n{=}5$.
+not resolved from the No Aux regime at $n{=}5$ (CIs cross zero).
 A complementary $8\times$ aux-capacity sweep has no effect, jointly
-ruling out capacity consumption on two independent axes. Supervised
+inconsistent with capacity consumption as the driver. Supervised
 CIFAR-100 defines the principle's boundary: zero effect, as the
 theory predicts.
 Effect size scales with coordination complexity across four MARL
@@ -183,14 +183,15 @@ structured, non-stationary auxiliary targets induce directional
 gradient noise near convergence, with a testable ordering prediction
 over target sources (random $<$ frozen $<$ co-learning).
 \item \textbf{Causal identification.} A target-source intervention
-and an $8\times$ aux-capacity sweep jointly rule out generic
-capacity-consumption and multi-task-conflict alternatives in
-cooperative MARL.
-\item \textbf{Theory.} A first-order model linking teammate drift
-to gradient noise via
+and an $8\times$ aux-capacity sweep are together inconsistent with
+generic capacity-consumption and multi-task-conflict explanations
+in this setting.
+\item \textbf{Theory.} A first-order model linking target-policy
+drift to gradient noise via
 $\Sigma_\varepsilon \approx J_\pi \Sigma_\pi J_\pi^\top$
 (Eq.~\eqref{eq:drift_to_noise}), with a drift-to-variance bound
-and a measurable cosine-std proxy ($R^2 = 0.94$ across logged conditions).
+and a cosine-std diagnostic that separates pathway-active from
+pathway-zero conditions.
 \item \textbf{Validation.} The predicted ordering and null conditions
 hold across four cooperative MARL benchmarks, a supervised-stationary
 boundary (CIFAR-100), and a slow-symmetric-drift boundary
@@ -370,7 +371,7 @@ observed instability through causally upstream quantities ($\Sigma_\pi$,
 $J_\pi$) rather than treating gradient noise as exogenous, using
 standard linearization steps we make explicit below.
 
-\paragraph{Step 1: defining directional interference.} Let
+\paragraph{Step 1: Defining directional interference.} Let
 $g_\pi(t) = \nabla_\theta L_{\mathrm{PPO}}(\theta_t)$ and
 $g_{\mathrm{aux}}(t) = \lambda \nabla_\theta L_{\mathrm{aux}}(\theta_t;
 \pi_j^{(t)})$ be the two gradient signals the actor receives at
@@ -396,7 +397,7 @@ Figure~\ref{fig:gradients} measures Full VABL's late-training signature
 ($\mathbb{E}[\cos] \approx 0$, $\mathrm{std}(\cos) = 0.185$), i.e.\
 $I_{\mathrm{dir}} \gg I_{\mathrm{mag}}$.
 
-\paragraph{Step 2: deriving $\Sigma_\varepsilon$ from teammate drift.}
+\paragraph{Step 2: Deriving $\Sigma_\varepsilon$ from target-policy drift.}
 Let $\pi_j \in \mathbb{R}^{d_\pi}$ denote the policy whose actions
 define the aux label at step $t$; in Full VABL this is the teammate's
 own co-learning policy, while the frozen-target and random-target
@@ -408,7 +409,7 @@ equivalently in the linear regime, by its action-probability vector
 stacked over the observed state distribution. Decompose the aux
 gradient as $g_{\mathrm{aux}}(t) = \bar g_{\mathrm{aux}} +
 \varepsilon(t)$. A first-order expansion of
-$g_{\mathrm{aux}}$ around $\bar\pi_j$, the time-averaged teammate
+$g_{\mathrm{aux}}$ around $\bar\pi_j$, the time-averaged target generating 
 policy over the analysis window, gives
 \begin{equation}
     \varepsilon(t) \approx J_\pi \,(\pi_j^{(t)} - \bar\pi_j),
@@ -423,25 +424,24 @@ g_{\mathrm{aux}}/\partial \pi_j |_{\bar\pi_j}$ and $J_\pi$ absorbs
 the $\lambda$ scaling of $g_{\mathrm{aux}}$. The gradient noise
 covariance factors through the target-generating policy's drift
 covariance. Two
-limits: frozen teammate ($\Sigma_\pi = 0$) gives
+limits: a frozen target-generating policy ($\Sigma_\pi = 0$) gives
 $\Sigma_\varepsilon \to 0$; a target constructed not to depend on
-teammate policy ($J_\pi = 0$, e.g.\ random or supervised targets)
-also gives $\Sigma_\varepsilon \to 0$. The target-source
-distinguishing test (\S\ref{sec:mechanism}) realizes both limits
-empirically. Equivalently, DG-PG's variance-reduction framework for
-cooperative MARL~\cite{yang2026dgpg} assumes an
+the target-generating policy ($J_\pi = 0$, e.g.\ random or
+supervised targets) also gives $\Sigma_\varepsilon \to 0$. The
+target-source distinguishing test (\S\ref{sec:mechanism}) realizes
+both limits empirically. Equivalently, DG-PG's variance-reduction
+framework for cooperative MARL~\cite{yang2026dgpg} assumes an
 \emph{exogenous} guidance target, $\nabla_\theta \tilde{x} = 0$
-(their Assumption~3.1); in our setting the aux target is the
-teammate's action, which depends on the teammate's co-evolving
-policy, so this exogeneity assumption is violated and
-$\Sigma_\varepsilon$ is driven by $\Sigma_\pi$ rather than
-collapsing. The $\delta$-stationarity bound
+(their Assumption~3.1); in our setting the aux target is generated
+by a co-evolving policy (the teammate's in Full VABL), so this
+exogeneity assumption is violated and $\Sigma_\varepsilon$ is
+driven by $\Sigma_\pi$ rather than collapsing. The $\delta$-stationarity bound
 of~\cite{li2022trustregion} formalizes $\Sigma_\pi$ via the
 KL-divergence of consecutive joint policies.
 The linearization is local in policy space and tightest in late
 training, where convergence implies small per-iteration drift.
 
-\paragraph{Step 3: noise-driven parameter variance.}
+\paragraph{Step 3: Noise-driven parameter variance.}
 Near a local optimum $\theta^*$ the policy loss is approximately
 quadratic with Hessian $H \succ 0$, giving $\nabla_\theta
 L_{\mathrm{PPO}} = H(\theta - \theta^*)$ which shrinks as $\theta \to
@@ -453,7 +453,7 @@ H^{-1} \bar g_{\mathrm{aux}}$, the displacement $\delta(t) = \theta(t)
     \label{eq:dynamics}
 \end{equation}
 
-\begin{proposition}[Drift-to-variance]
+\begin{proposition}[Local drift-to-variance scaling]
 \label{prop:variance}
 Under Eq.~\eqref{eq:dynamics} with $\varepsilon(t)$ treated as
 i.i.d.\ with covariance given by Eq.~\eqref{eq:drift_to_noise} and
@@ -462,7 +462,7 @@ displacement variance satisfies
 \begin{equation}
     \mathbb{E}[\|\delta\|^2]
     \;\propto\;
-    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
+    \frac{\alpha \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
          {\lambda_{\min}(H)}.
     \label{eq:variance_bound}
 \end{equation}
@@ -478,17 +478,20 @@ $\lambda_{\min}(H)$.
 Let $\eta = \mathbb{E}_t[\|g_\pi(t)\|]$ denote the typical
 policy-gradient magnitude; the same Lyapunov argument behind
 Proposition~\ref{prop:variance} gives a policy-signal displacement
-variance $\alpha^2 \eta^2 / \lambda_{\min}(H)$. Instability onset
+variance $\alpha \eta^2 / \lambda_{\min}(H)$. Instability onset
 corresponds to the aux-drift variance exceeding this signal variance:
 \begin{equation}
-    \underbrace{\frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}}_{\text{aux-drift variance}}
+    \underbrace{\frac{\alpha \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}{\lambda_{\min}(H)}}_{\text{aux-drift variance}}
     \;\gtrsim\;
-    \underbrace{\frac{\alpha^2 \eta^2}{\lambda_{\min}(H)}}_{\text{policy-signal variance}},
+    \underbrace{\frac{\alpha \eta^2}{\lambda_{\min}(H)}}_{\text{policy-signal variance}},
     \label{eq:threshold}
 \end{equation}
 equivalently $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top) \gtrsim
-\eta^2$ after the common $\alpha^2/\lambda_{\min}(H)$ factor
-cancels. This yields three testable predictions:
+\eta^2$ after the common $\alpha/\lambda_{\min}(H)$ factor
+cancels. Writing $J_\pi = \lambda \tilde J_\pi$ makes the
+$\lambda$-scaling explicit: $\lambda^2 \mathrm{tr}(\tilde J_\pi
+\Sigma_\pi \tilde J_\pi^\top) \gtrsim \eta^2$. This yields three
+testable predictions:
 \textbf{(a) Stationarity null}: $\Sigma_\pi \approx 0$ (supervised
 labels, symmetric slow drift) $\Rightarrow$ no pathology.
 \textbf{(b) Pathway null}: interventions that drive
@@ -508,10 +511,10 @@ The prediction holds within a $\lambda$ range where aux-head
 representations are qualitatively unchanged, not globally.
 
 \paragraph{Interpreting $J_\pi$.}
-$J_\pi$ is the sensitivity of the aux gradient to the teammate
+$J_\pi$ is the sensitivity of the aux gradient to the target-policy
 action distribution; its column space coincides with the pathway
 through attention/GRU/$\phi_\theta$. It is large when the aux head
-is tightly tuned to the current teammate and small when the encoder
+is tightly tuned to the current target and small when the encoder
 is structurally insensitive (mean pooling, stop-gradient, or
 critic-side placement).
 
@@ -687,26 +690,26 @@ The fix paths are consistent with two distinct stories: directional
 interference driven by structured non-stationary aux targets, and a
 generic aux-capacity-consumption alternative in which any aux head
 attached to the shared encoder degrades late-training performance
-regardless of what the aux gradient encodes. We rule out the latter
-with two independent controls.
+regardless of what the aux gradient encodes. Two independent
+controls are inconsistent with the latter.
 
 \textbf{Target-source test.} We hold aux capacity, architecture, and
 the aux-to-encoder gradient pathway identical to Full and vary only
 the \emph{source} of the aux target (\S\ref{sec:method_distinguishing}).
 The capacity-consumption hypothesis predicts all three conditions to
-be pathological. Table~\ref{tab:target_source} falsifies this: at
-$n{=}5$ both frozen and random targets are indistinguishable from
-No Aux (frozen vs No Aux $d{=}-0.75$, CI $[-2.73,{+}0.44]$; random
-vs No Aux $d{=}-0.04$, CI $[-1.47,{+}1.40]$; both cross zero),
-while teammate co-learning remains distinct from No Aux ($d{=}+1.40$,
-CI $[{+}0.47,{+}3.58]$). Structured co-learning targets carry
+be pathological. Table~\ref{tab:target_source} is inconsistent with
+this: at $n{=}5$, teammate co-learning remains distinct from No Aux
+($d{=}+1.40$, CI $[{+}0.47,{+}3.58]$), while both frozen-vs-No Aux
+($d{=}-0.75$, CI $[-2.73,{+}0.44]$) and random-vs-No Aux ($d{=}-0.04$,
+CI $[-1.47,{+}1.40]$) CIs cross zero (no resolved effect, not a
+formal equivalence test). Structured co-learning targets carry
 teammate-policy-specific information that drifts across iterations;
 frozen targets remove the drift, random targets remove both. Only
 the structured-and-drifting combination degrades Final50 stability.
 
 \begin{table}[t]
 \centering
-\caption{Target-source distinguishing test on Overcooked AA (10M steps, 5 seeds). Aux network and gradient pathway identical to Full; only the target source varies. Teammate co-learning targets are pathological (Cohen's $d = +1.40$ vs No Aux, bootstrap CI $[+0.47, +3.58]$); frozen and random targets are both statistically indistinguishable from No Aux at $n{=}5$ (both CIs cross zero, \S\ref{sec:mechanism}), with random targets producing the tightest cross-seed std in the paper.}
+\caption{Target-source distinguishing test on Overcooked AA (10M steps, 5 seeds). Aux network and gradient pathway identical to Full; only the target source varies. Teammate co-learning targets are pathological (Cohen's $d = +1.40$ vs No Aux, bootstrap CI $[+0.47, +3.58]$); frozen and random targets are both not resolved from No Aux at $n{=}5$ (both CIs cross zero, \S\ref{sec:mechanism}; absence of a resolved effect, not equivalence), with random targets producing the tightest cross-seed std in the paper.}
 \label{tab:target_source}
 \small
 \begin{tabular}{lcccc}
@@ -751,8 +754,8 @@ distinguishable from $64$ (Final50 means in $[462.89, 468.74]$,
 cross-seed stds in $[5.49, 9.55]$). An $8\times$ sweep produces no
 resolvable effect, reinforcing the target-source conclusion: capacity
 consumption alone cannot explain the Final50 instability. Together
-with the target-source test, this rules out the capacity-consumption
-hypothesis on two independent axes.
+with the target-source test, this is inconsistent with
+capacity-consumption as the driver on two independent axes.
 
 \subsection{Fix Paths, Given the Mechanism}
 \label{sec:fixes}
@@ -854,28 +857,20 @@ Belief~\cite{zhai2023dynamic}, are immediate future work.
 \label{sec:conclusion}
 % ============================================================================
 
-We identify a learning-dynamics principle in cooperative MARL:
-auxiliary targets that are both \emph{structured} and
-\emph{non-stationary} inject directional gradient noise that
-dominates policy gradients near convergence. The factorization
-$\Sigma_\varepsilon \approx J_\pi \Sigma_\pi J_\pi^\top$
-(Eq.~\eqref{eq:drift_to_noise}) and Proposition~\ref{prop:variance}
-tie late-training instability to upstream co-learning dynamics
-through measurable quantities. Target-source and $8{\times}$ capacity
-controls rule out alternatives; the cosine-std proxy orders
-conditions at $R^2 = 0.94$; the pathology reproduces on four
-cooperative benchmarks and two architecture classes, and disappears
-exactly where stationarity (CIFAR-100, $d = -0.16$) or symmetric
-drift (MPE, $d \sim 0$) predict. Three zero-cost gradient-pathway
-fixes recover stability.
+A constant auxiliary weight on a target that is both task-coupled
+and co-adaptive is not a free regularizer; it is a silent
+late-training stability risk whose severity scales with how fast
+the target drifts relative to the vanishing policy gradient. When
+either ingredient is absent, the aux is harmless.
 
-For practitioners: a constant aux weight on a task-coupled
-co-adaptive target is a late-training stability risk, not a free
-regularizer. The drift-gated aux controller
-(\S\ref{sec:theory}) approximates DG-PG's~\cite{yang2026dgpg}
-closed-form variance-optimal weight; its empirical evaluation,
-and extension to the critic-side reversal and SMAX residual mean
-gap, are natural next steps.
+More broadly, gradient conflict in deep policy learning is not
+always a magnitude problem and not always a multi-task problem.
+Directional, target-driven interference is a distinct failure mode
+with its own diagnostic (temporal gradient-cosine variance) and
+its own remedy (sever the encoder-side pathway). A drift-gated
+aux controller approximating the DG-PG~\cite{yang2026dgpg}
+closed-form weight is the natural successor; the critic-side
+reversal and SMAX residual mean gap remain open.
 
 
 % ============================================================================
@@ -932,9 +927,9 @@ setting violates relative to each.
 \label{app:theory_linearization}
 
 The first-order expansion $\varepsilon(t) \approx J_\pi (\pi_j^{(t)}
-- \bar\pi_j)$ is exact when the teammate policy stays within a small
-neighborhood of the time-averaged policy $\bar\pi_j$ over the
-analysis window. Formally, write $g_{\mathrm{aux}}(t) =
+- \bar\pi_j)$ is exact when the target-generating policy stays
+within a small neighborhood of the time-averaged policy $\bar\pi_j$
+over the analysis window. Formally, write $g_{\mathrm{aux}}(t) =
 g_{\mathrm{aux}}(\bar\pi_j) + J_\pi \Delta_t +
 \mathcal{O}(\|\Delta_t\|^2)$ with $\Delta_t = \pi_j^{(t)} -
 \bar\pi_j$; the drop-to-noise factorization
@@ -954,9 +949,9 @@ transients.
 
 Proposition~\ref{prop:variance} treats $\varepsilon(t)$ as i.i.d.\
 to obtain a clean closed-form bound. Real $\varepsilon(t)$ is
-autocorrelated because consecutive teammate policies differ by a
-single gradient step, so $\pi_j^{(t+1)}$ and $\pi_j^{(t)}$ are
-close in parameter space. Let $\tau_c = \sum_{k=0}^{\infty}
+autocorrelated because consecutive target-generating policies
+differ by a single gradient step, so $\pi_j^{(t+1)}$ and
+$\pi_j^{(t)}$ are close in parameter space. Let $\tau_c = \sum_{k=0}^{\infty}
 \rho_\varepsilon(k)$ denote the integrated autocorrelation time of
 $\varepsilon$, where $\rho_\varepsilon(k) = \mathrm{Cov}[\varepsilon(t),
 \varepsilon(t+k)] / \mathrm{Var}[\varepsilon(t)]$. For an AR(1)
@@ -966,7 +961,7 @@ approximation with decay rate $\phi \in [0,1)$, $\tau_c =
     \mathbb{E}[\|\delta\|^2]_{\mathrm{colored}}
     \;\propto\;
     \tau_c \cdot
-    \frac{\alpha^2 \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
+    \frac{\alpha \,\mathrm{tr}(J_\pi \,\Sigma_\pi\, J_\pi^\top)}
          {\lambda_{\min}(H)}.
     \label{eq:colored_bound}
 \end{equation}
@@ -998,19 +993,19 @@ representation is qualitatively unchanged,'' not as a global claim.
 \subsection{Interpreting $J_\pi$ in VABL}
 \label{app:theory_jpi}
 
-$J_\pi$ is the sensitivity of the aux gradient to the teammate
-action distribution, evaluated around $\bar\pi_j$. In VABL its
-column space coincides with the pathway through
-attention/GRU/$\phi_\theta$ by which teammate one-hot inputs
-influence aux-head predictions. It is large when the aux head is
-tightly tuned to the current teammate, and small when the encoder
-is structurally insensitive: mean pooling collapses heterogeneous
-teammates onto a single mean vector, so different teammate
-identities produce identical contexts; stop-gradient on $b_t^i$
-cuts the encoder-side coupling while leaving the aux MLP trainable;
-critic-side placement routes $g_{\mathrm{aux}}$ through the critic
-parameters entirely, so the actor encoder never receives the aux
-signal. All three interventions drive the \emph{encoder-subspace}
+$J_\pi$ is the sensitivity of the aux gradient to the
+target-policy action distribution, evaluated around $\bar\pi_j$. In
+VABL with teammate-action targets, its column space coincides with
+the pathway through attention/GRU/$\phi_\theta$ by which teammate
+one-hot inputs influence aux-head predictions. It is large when the
+aux head is tightly tuned to the current target, and small when
+the encoder is structurally insensitive: mean pooling collapses
+heterogeneous target sources onto a single mean vector, so
+different target identities produce identical contexts;
+stop-gradient on $b_t^i$ cuts the encoder-side coupling while
+leaving the aux MLP trainable; critic-side placement routes
+$g_{\mathrm{aux}}$ through the critic parameters entirely, so the
+actor encoder never receives the aux signal. All three interventions drive the \emph{encoder-subspace}
 projection of $J_\pi$ toward zero without eliminating the aux loss
 itself.
 
@@ -1067,9 +1062,9 @@ combining weight
 \end{equation}
 where $\sigma_J^2, \sigma_G^2$ are the variances of the
 policy-gradient and guidance-gradient estimators and $\rho$ is
-their correlation. In our setting the aux target is the teammate's
-action, which depends on the teammate's co-evolving policy
-($\nabla_\theta \tilde{x}_t \neq 0$). Assumption~3.1 is violated,
+their correlation. In our setting the aux target is generated by a
+co-evolving policy (the teammate's in Full VABL), so
+$\nabla_\theta \tilde{x}_t \neq 0$. Assumption~3.1 is violated,
 which is precisely why $\Sigma_\varepsilon$ is driven by
 $\Sigma_\pi$ rather than collapsing. Reading $\hat{g}_J = g_\pi$,
 $\hat{g}_G = g_{\mathrm{aux}}$, $\rho = \mathbb{E}_t[\cos]$, the
@@ -1086,7 +1081,7 @@ object that our $\Sigma_\pi$ informally approximates.
 \textbf{Trust-Region Decomposition~\cite{li2022trustregion}.} Li
 et al.\ introduce $\delta$-stationarity, an explicit
 non-stationarity measure bounded by the KL-divergence of
-consecutive joint policies. When we say ``teammate policy drift,''
+consecutive joint policies. When we say ``target-policy drift,''
 this is the formal quantity being measured; the KL bound gives an
 upper estimate on $\mathrm{tr}(\Sigma_\pi)$ in natural parameter
 coordinates.
@@ -1170,9 +1165,11 @@ pathway, and loss form identical to Full; they vary \emph{only}
 the source and structure of the aux target. The
 capacity-consumption hypothesis predicts all three conditions to
 be pathological. The directional-interference hypothesis predicts
-recovery scaled by residual structure: none for Full, partial for
-frozen (structured but stationary), full for random (neither
-structured nor non-stationary).
+a graded recovery: teammate-co-learning stays pathological, while
+frozen and random targets both move back toward the No Aux regime
+(at $n{=}5$ the frozen- and random-vs-No-Aux Cohen's $d$ bootstrap
+CIs both cross zero; only the teammate-vs-No-Aux comparison
+resolves).
 
 \subsection{Baselines: full description and comparability rationale}
 \label{app:method_baselines}
@@ -1799,52 +1796,6 @@ rather than the policy representation (which accumulates damage through
 recurrence).
 
 
-\section{Exploratory: VAE Belief Encoder (Dynamic-Belief-style)}
-\label{app:vae_belief}
-
-As an exploratory probe of whether the pathology reproduces when
-VABL's recurrent belief encoder is replaced by a
-reparameterization-based VAE belief (matching Dynamic
-Belief's~\cite{zhai2023dynamic} architectural signature with its KL
-weight $\beta = 0.005$), we run the $2 \times 2$ ablation on
-Overcooked AA at 10M steps, 5 seeds each.
-
-\begin{table}[H]
-\centering
-\caption{VAE-belief $2 \times 2$ ablation on Overcooked AA (5 seeds; Dynamic-Belief-style reparameterization with $\beta=0.005$). Cross-seed std is one to two orders of magnitude larger than the GRU-belief equivalents (Table~\ref{tab:ablation}); the test is underpowered to resolve the pathology signal.}
-\label{tab:vae_belief}
-\small
-\begin{tabular}{lcc}
-\toprule
-\textbf{Configuration} & \textbf{Final50} & \textbf{std} \\
-\midrule
-Full (attn + aux)        & $510.85$ & $96.29$ \\
-No Attention (mean + aux) & $347.43$ & $67.30$ \\
-No Aux (attn only)       & $455.98$ & $107.06$ \\
-Neither (mean only)      & $376.17$ & $43.37$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Under the VAE belief, cross-seed Final50 standard deviations are
-$43$--$107$, one to two orders of magnitude larger than the
-$1.8$--$8.6$ we observe with the GRU belief encoder
-(Table~\ref{tab:ablation}). Our $\sim 10$-point pathology signal
-cannot be resolved against this intrinsic variance at $n=5$: the
-Cohen's $d$ for Full vs No Aux is $-0.54$ with CI crossing zero.
-
-We report this as an exploratory probe and not as a confirmation or
-refutation. Three interpretations are consistent with the data.
-(a)~The VAE reparameterization adds training stochasticity that
-dominates the $n=5$ pathology signal; a larger $n$ or longer training
-would be required to resolve. (b)~The VAE's implicit regularization
-partially mitigates the directional-interference pathology, leaving a
-residual gap below the resolution of this test. (c)~The VAE belief is
-a different enough architecture that the pathology has different
-dynamics here; a VAE-specific study would be needed to characterize
-them. The main paper does not rely on this experiment.
-
-
 \section{Environments, Baselines, and Metrics}
 \label{app:env_baselines_metrics}
 
@@ -1976,8 +1927,9 @@ opens with a curiosity prompt before stating the mechanism; the
 abstract puts problem, mechanism, and what-the-failure-is-not in
 three citation-free sentences; an italicized one-line principle
 closes the first intro paragraph; Figure~\ref{fig:causal_chain}
-gives a five-box conceptual chain (teammate updates $\to \Sigma_\pi
-\to J_\pi \to \Sigma_\varepsilon \to$ instability) before any math;
+gives a four-box conceptual chain (target-policy updates $\to
+\Sigma_\pi \to \Sigma_\varepsilon = J_\pi \Sigma_\pi J_\pi^\top \to$
+instability) before any math;
 contributions are a scannable bulleted list with noun-phrase labels;
 and the Theory section opens with a plain-language intuition
 sentence before the four-step outline. Numeric thresholds and

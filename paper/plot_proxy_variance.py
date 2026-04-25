@@ -92,9 +92,7 @@ def plot(x, y, labels, save_to):
         r"Cosine temporal std, late 50\% (proxy for $\mathrm{tr}(J_\pi \Sigma_\pi J_\pi^\top)$)"
     )
     ax.set_ylabel(r"Final50 cross-seed std")
-    ax.set_title(
-        fr"Proxy predicts variance across conditions ($R^2 = {r2:.2f}$)"
-    )
+    # Title removed; figure labeled in LaTeX caption (R^2 reported there).
     ax.grid(True, alpha=0.3)
     ax.set_xlim(-0.01, max(x) * 1.25)
     ax.set_ylim(0, max(y) * 1.15)

@@ -110,7 +110,7 @@ def plot(seeds_data, save_to):
     ax.axhline(0, color="gray", linestyle=":", linewidth=1.0, alpha=0.7)
     ax.set_xlabel("Training iteration")
     ax.set_ylabel(r"$\cos(g_{\pi}, g_{\mathrm{aux}})$")
-    ax.set_title("(a) Full VABL cosine, per-seed")
+    # Title removed; panel labeled in LaTeX caption.
     ax.legend(loc="best", frameon=True, ncol=2)
     ax.grid(True, alpha=0.3)
 
@@ -132,7 +132,7 @@ def plot(seeds_data, save_to):
                label=fr"mean = {late_cos.mean():+.3f}")
     ax.set_xlabel(r"$\cos(g_{\pi}, g_{\mathrm{aux}})$")
     ax.set_ylabel("Count (iterations x seeds)")
-    ax.set_title("(b) Cosine distribution, late 50%")
+    # Title removed; panel labeled in LaTeX caption.
     ax.legend(loc="best", frameon=True)
     ax.grid(True, alpha=0.3)
     std_txt = fr"std = {late_cos.std(ddof=1):.3f}"
@@ -161,7 +161,7 @@ def plot(seeds_data, save_to):
     ax.axhline(0.25, color="black", linestyle="--", linewidth=1.2, alpha=0.8, label="0.25")
     ax.set_xlabel("Training iteration")
     ax.set_ylabel(r"$|g_{\mathrm{aux}}| / |g_{\pi}|$")
-    ax.set_title("(c) Magnitude ratio")
+    # Title removed; panel labeled in LaTeX caption.
     ax.legend(loc="best", frameon=True, ncol=2)
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0, max(0.35, r_arr.max() * 1.1))
