@@ -73,13 +73,13 @@ real, linear in the measured range, and carried substantially by the shared
 encoder. (3) The zero-mean noise assumption: tested on SMAX, late-training
 mean gradient cosine is +0.0062, so we detect no substantial directional
 bias in this measurement (your Q7); a point estimate does not establish the
-assumption, and the revision reports it with its uncertainty. The learning-rate coupling eta remains unmeasured; that is now
-the only unmeasured quantity, and the revision says so.
+assumption, and the camera-ready reports it with its uncertainty. The learning-rate coupling eta remains unmeasured; that is now
+the only unmeasured quantity, and the camera-ready says so.
 
 **W2 (Eq. 8 is uncalibrated).** Correct. Eq. 8 is restated as an ordering
 prediction under explicit local assumptions, not a calibrated boundary. The
 new per-iteration drift and gradient logs make calibration feasible and it is
-scheduled for the revision.
+scheduled for the camera-ready.
 
 **W3 and Q5 (PCGrad and GradNorm).** The reasoning we believe motivated this:
 if the interference were ordinary persistent task conflict, standard gradient
@@ -126,7 +126,7 @@ gradient scale was not matched to the action-prediction loss, so the test
 cannot distinguish "the deficit is specific to the action-prediction
 formulation" from "these auxiliary gradients were too small to matter." The
 demonstrated scope of the phenomenon is therefore next-action prediction
-through the shared encoder, and the revision states exactly that.
+through the shared encoder, and the camera-ready states exactly that.
 
 **Q6 (drift-gated controller).** Implemented to your specification:
 stop-gradient on the auxiliary pathway whenever the rolling standard
@@ -186,7 +186,7 @@ batches and shows no directional-bias signature. These corrections came from
 our own falsification tests, most of them suggested by you, and what
 survived them is stated below.
 
-**What the revised paper claims.** In cooperative MARL with
+**What the camera-ready claims.** In cooperative MARL with
 teammate-action-prediction auxiliaries through a shared actor encoder, a
 constant-weight auxiliary loss produces a small but replicated
 final-performance deficit and a rare low-outcome tail that never appears
@@ -225,7 +225,7 @@ Peak-to-final drops are equal between Full and No-Aux in the submission
 environment (4.77 +/- 2.47 versus 4.82 +/- 1.83), which we report as a null.
 Your statistical requests are adopted wholesale: bootstrap intervals, Welch
 tests, and pooled-standard-deviation effect sizes on every 20-seed contrast,
-per-seed curves in the revision, and 5-seed mechanism results labeled
+per-seed curves in the camera-ready, and 5-seed mechanism results labeled
 directional throughout.
 
 The larger samples also performed the falsification five seeds could not:
@@ -263,10 +263,10 @@ linear auxiliary-gradient response (linearity ratio 3.95 against a
 pre-stated 3 to 5 band) that drops by about 40 percent when the encoder
 pathway is severed; and the zero-mean noise assumption, tested on SMAX,
 where we detect no substantial directional bias (late mean cosine +0.0062;
-a point estimate, reported with its uncertainty in the revision). The between-condition cosine
+a point estimate, reported with its uncertainty in the camera-ready). The between-condition cosine
 diagnostic reversed under this direct measurement and is withdrawn.
 Proposition 1 is restated as an approximation with explicit
-local-quadraticity and noise assumptions. The theory's role in the revision
+local-quadraticity and noise assumptions. The theory's role in the camera-ready
 is to organize testable predictions, several of which the new measurements
 now pass, and one of which they falsified.
 
@@ -282,7 +282,7 @@ fresh gap is small, unstable across batches (it reversed sign between two
 5-seed batches), and shows no directional-bias signature, so SMAX and the
 critic-side variance observation move to limitations, scoped as you asked.
 
-**Q2, first half (related work).** The revision adds direct comparisons with
+**Q2, first half (related work).** The camera-ready adds direct comparisons with
 moving-target and dynamic-teacher methods, adaptive auxiliary-task
 weighting, PCGrad, and GradNorm, distinguishing target stabilization, loss
 balancing, and persistent-conflict correction from the temporal directional
@@ -307,7 +307,7 @@ removed. We make no claim about the provenance of the text you observed and
 have asked the program chairs to compare the review-system copy against our
 uploaded file. Thank you for raising it; integrity flags deserve engagement.
 
-**What the revised paper claims.** A replicated, correctly calibrated
+**What the camera-ready claims.** A replicated, correctly calibrated
 final-performance deficit from co-adaptive action-prediction auxiliaries in
 cooperative MARL, with the pathway measured, the rare failure tail
 characterized, simple alternative explanations ruled out by controls you and
@@ -336,7 +336,7 @@ n = 5). We recalibrated the headline effect from the submitted 10.24 points
 the variance-asymmetry and bimodality claims that 20 seeds falsified.
 
 **W1 (the paper validates its own reconstruction, not the published
-systems).** We agree and the revision adopts your distinction. BEPAL and
+systems).** We agree and the camera-ready adopts your distinction. BEPAL and
 Dynamic Belief instantiate the design pattern the paper studies,
 teammate-prediction auxiliaries coupled to shared actor representations, but
 we do not claim to have established the mechanism inside them. VABL is the
@@ -385,13 +385,13 @@ measure directly (the perturbation-response method above) and which richer
 belief architectures plausibly increase. We state this as a testable
 prediction rather than a claimed implication.
 
-**What the revised paper claims.** A replicated failure pattern in a
+**What the camera-ready claims.** A replicated failure pattern in a
 controlled setting that instantiates a common MARL design; direct
 measurements replacing what were previously proxies, including the pathway
 sensitivity your Q2 turns on; the rival explanation your Q1 proposed tested
 and disfavored, with the residual SMAX puzzle honestly retained; and
 practical mitigations, including a target-level design, that eliminate the
-failure tail. The corrections in the revision (effect size, variance claims,
+failure tail. The corrections in the camera-ready (effect size, variance claims,
 one diagnostic) were made proactively when larger samples falsified them,
 which we believe is how the discussion period is supposed to work.
 
@@ -429,12 +429,12 @@ when the pathway is severed), the reviewer-proposed gating controller beats
 a matched-duty random control, four weight schedules and an EMA-distilled
 target design all eliminate the failure tail, and the representation-
 collapse alternative was tested and disfavored in both environments. No new
-positive claim enters the revision that was not tested this period; every
+positive claim enters the camera-ready that was not tested this period; every
 change to reviewed claims is a calibration or narrowing.
 
 **2. Category and scope.** We agree Theory was the wrong category (all three
 reviewers marked General) and that the submitted abstract overclaimed. The
-revision presents the work as an empirical characterization organized by a
+camera-ready presents the work as an empirical characterization organized by a
 first-order model, scoped to structured, co-adaptively generated
 teammate-prediction targets whose gradients propagate through a shared actor
 encoder.
@@ -449,6 +449,20 @@ Appendix L, drafting meta-commentary being removed. We ask that the program
 chairs compare the review-system copy of our submission against our upload.
 We make no claim about the provenance of whatever the reviewer observed, and
 our public reply is factual and without speculation.
+
+**4. On process and the scope of changes.** We are aware the paper is
+evaluated as submitted, and we want to be precise about the size of the
+delta the discussion period implies, because we believe it is within normal
+camera-ready scope. The changes are: effect-size numbers in two tables and
+the abstract; removal of two secondary analyses (the variance-asymmetry
+comparison and one diagnostic figure) whose conclusions did not survive
+larger samples; scope wording in the abstract and introduction; and appendix
+additions reporting the discussion-period experiments. The architecture,
+methods, experimental design, theory section (restated as an approximation,
+as reviewers requested), and the paper's central claims are unchanged, and
+the new data support those claims at four times the submitted seed count. No
+new positive claim enters the paper. We are glad to enumerate the exact
+diffs for the committee if useful.
 
 We respectfully ask that the final recommendation weigh the post-response
 record, including reviewer engagement with the new experiments, rather than
