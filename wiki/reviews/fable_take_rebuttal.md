@@ -21,12 +21,13 @@ confidential comment to the AC.
 
 # Response to Reviewer yGKw
 
-Thank you for a review that functioned as an experimental program. We ran it:
-all of Q1, Q2, Q5, Q6, Q7, and Q8 are now completed experiments, Q3's
-measurement is done rather than promised, Q4 was tested with two new
-auxiliary-task variants, and your limitation about root cause versus symptom
-led us to build and validate a target-design intervention. Below, each answer
-starts from the reasoning we believe motivated the question.
+Thank you for a review that functioned as an experimental program. We ran new
+experiments addressing every question, including Q3's measurement and two
+auxiliary-task variants for Q4, and your limitation about root cause versus
+symptom led us to build and validate a target-design intervention. Where a
+requested analysis remained incomplete or inconclusive, we narrow the
+corresponding claim explicitly below. Each answer starts from the reasoning
+we believe motivated the question.
 
 **What the new experiments establish.** The paper's central comparison is the
 Full configuration (attention plus a teammate-action-prediction auxiliary
@@ -43,7 +44,8 @@ code revision and the original random seeds gives a 2.56-point gap
 (directional, n = 5). Across more than 230 full-length runs completed during
 this discussion period, no run of any configuration that severs the auxiliary
 gradient pathway or holds targets stationary ever finished below 460, while
-4 of 55 plain Full runs did.
+4 of 55 plain Full runs did (the 460 threshold was selected after seeing the
+data, so these counts are reported descriptively, never with a p-value).
 
 **W1 and Q1, Q3 (the theory's quantities were unmeasured).** The concern, as
 we read it: a first-order model whose central quantities are never measured
@@ -52,9 +54,13 @@ period moved the paper most. Three of the four quantities are now measured.
 (1) Target-policy drift: consecutive-policy KL logged at every iteration;
 late-training drift is 2.42 to 2.58 x 10^-3 nats across all conditions,
 confirming that policy movement persists in the regime where the deficit is
-measured. Honest caveat: this measures the live policy's drift, which equals
-target drift only in the Full condition, so it validates a premise rather
-than attributing the effect. (2) Pathway sensitivity, your Q3, with
+measured. Two honest caveats: this measures the live policy's drift, which
+equals target drift only in the Full condition, so it validates a premise
+rather than attributing the effect; and we have not yet completed the
+cross-seed and cross-task correlation you requested between this KL, the
+cosine-variability measure, and Final50 degradation, so we treat the KL
+measurement as evidence that drift persists, not as quantitative validation
+of the predicted scaling. (2) Pathway sensitivity, your Q3, with
 pre-registered criteria: we perturb the auxiliary targets (each target
 flipped to a random action with probability eps) and measure the relative
 change in the auxiliary gradient. The response scales linearly with eps
@@ -65,8 +71,9 @@ roughly 40 percent (Full 2.47 versus stop-gradient 1.52 at eps = 0.1), with
 non-overlapping per-seed ranges at n = 5. The pathway the model posits is
 real, linear in the measured range, and carried substantially by the shared
 encoder. (3) The zero-mean noise assumption: tested on SMAX, late-training
-mean gradient cosine is +0.0062, so the assumption holds where we could test
-it (your Q7). The learning-rate coupling eta remains unmeasured; that is now
+mean gradient cosine is +0.0062, so we detect no substantial directional
+bias in this measurement (your Q7); a point estimate does not establish the
+assumption, and the revision reports it with its uncertainty. The learning-rate coupling eta remains unmeasured; that is now
 the only unmeasured quantity, and the revision says so.
 
 **W2 (Eq. 8 is uncalibrated).** Correct. Eq. 8 is restated as an ordering
@@ -130,11 +137,15 @@ No-Aux (p = 0.097). You would reasonably ask whether that is just duty
 cycle. We ran the matched control: gating randomly with the same 70 percent
 probability yields only 466.72 +/- 2.52, at un-gated Full level. Gating at
 the moments your signal selects outperforms gating randomly at matched duty
-cycle (directional, n = 5). This also sharpens an honest distinction: the
-between-condition version of the cosine diagnostic failed and is withdrawn
-(details in the corrections paragraph), but the within-run timing
-information in the same signal is demonstrably useful, which is precisely
-what your controller exploits.
+cycle (directional, n = 5). Scope disclosure: we evaluated two thresholds
+(tau = 0.10 and tau = 0.15) with a single rolling-window size of 10
+iterations, plus the matched-duty random control; threshold and window-size
+sensitivity beyond these points remains untested, so we present this as a
+proof-of-concept controller rather than a robustness result. It also
+sharpens an honest distinction: the between-condition version of the cosine
+diagnostic failed and is withdrawn (details in the corrections paragraph),
+but the within-run timing information in the same signal is demonstrably
+useful, which is precisely what your controller exploits.
 
 **Q8 and W5 (schedules beyond linear; non-monotonicity).** Three additional
 schedules, five seeds each: cosine annealing 471.65 +/- 1.54, exponential
@@ -155,9 +166,9 @@ retaining the auxiliary task; a faster average (decay 0.99) gives 466.69 +/-
 3.71, at the un-gated Full level; both arms have zero sub-460 runs
 (directional, n = 5). The designed family now spans live targets (full
 drift), EMA (slowed), periodic snapshots (piecewise), and frozen (zero
-drift); its low-drift end consistently avoids the deficit, and the averaging
-rate matters, consistent with drift rate being the operative variable at
-this weight. The averaging rate inherits the
+drift); its low-drift end consistently avoids the deficit, and the
+directional difference between the two tested averaging rates is consistent
+with rate dependence. The averaging rate inherits the
 drift-versus-relevance tradeoff the paper analyzes, which is exactly why the
 analysis matters to the design.
 
@@ -250,8 +261,9 @@ proxied: target-policy drift via consecutive-policy KL at every iteration
 sensitivity via a pre-registered target-perturbation experiment showing a
 linear auxiliary-gradient response (linearity ratio 3.95 against a
 pre-stated 3 to 5 band) that drops by about 40 percent when the encoder
-pathway is severed; and the zero-mean noise assumption, tested on SMAX and
-not rejected (late mean cosine +0.0062). The between-condition cosine
+pathway is severed; and the zero-mean noise assumption, tested on SMAX,
+where we detect no substantial directional bias (late mean cosine +0.0062;
+a point estimate, reported with its uncertainty in the revision). The between-condition cosine
 diagnostic reversed under this direct measurement and is withdrawn.
 Proposition 1 is restated as an approximation with explicit
 local-quadraticity and noise assumptions. The theory's role in the revision
@@ -259,7 +271,8 @@ is to organize testable predictions, several of which the new measurements
 now pass, and one of which they falsified.
 
 **W5 (fixes inconsistent across environments).** Two updates. First, the
-mitigation family is broader and uniformly clean: linear, cosine,
+mitigation family is broader, and all tested mitigation arms avoided
+sub-460 outcomes in these five-seed experiments: linear, cosine,
 exponential, and drift-adaptive schedules, stop-gradient, a drift-gated
 controller (471.90 +/- 1.93 at its stronger setting, and gating on the
 measured signal beats random gating at matched duty cycle, 466.72 +/- 2.52),
@@ -268,6 +281,13 @@ low-outcome tail entirely, zero sub-460 runs among them. Second, SMAX: its
 fresh gap is small, unstable across batches (it reversed sign between two
 5-seed batches), and shows no directional-bias signature, so SMAX and the
 critic-side variance observation move to limitations, scoped as you asked.
+
+**Q2, first half (related work).** The revision adds direct comparisons with
+moving-target and dynamic-teacher methods, adaptive auxiliary-task
+weighting, PCGrad, and GradNorm, distinguishing target stabilization, loss
+balancing, and persistent-conflict correction from the temporal directional
+interference studied here; the PCGrad and GradNorm rows of that comparison
+are now backed by the experiments above rather than citation alone.
 
 **Q3 (implementation details).** Agents share parameters and use learned
 identity embeddings. The auxiliary head predicts each visible teammate's
@@ -322,8 +342,10 @@ teammate-prediction auxiliaries coupled to shared actor representations, but
 we do not claim to have established the mechanism inside them. VABL is the
 controlled testbed in which target source and gradient path can be
 manipulated independently; the Zhai et al. Static-Belief comparison is
-external corroboration, not replication; a direct replication on a published
-system is committed for the camera-ready.
+external corroboration, not replication; a replication attempt on a
+published system is planned for the camera-ready, and if it cannot be
+completed to the evidential standard of this response, the claim scope
+remains exactly as stated here.
 
 **W2 (the linearization is tight where the effect is mildest).** Accepted
 and now stated in Section 4. The first-order model is scoped to late
@@ -337,9 +359,11 @@ is severed.
 
 **Q1 (does a secondary pathology such as representation collapse coexist on
 SMAX?).** We took your hypothesis seriously enough to measure it in both
-environments. Two results. First, the directional-bias explanation is ruled
-out where you asked: late-training mean gradient cosine on SMAX is +0.0062,
-indistinguishable from zero. Second, representation collapse is disfavored:
+environments. Two results. First, we detect no substantial directional bias
+where you asked: late-training mean gradient cosine on SMAX is +0.0062, a
+point estimate that gives the directional-bias account no support without
+our claiming the assumption is established. Second, representation collapse
+is disfavored:
 the effective rank of the belief representation is higher, not lower, under
 the auxiliary loss (SMAX: 35.2 +/- 2.7 versus 30.4 +/- 2.6 for No-Aux;
 Overcooked shows the same direction, 21.7 versus 16.1). The auxiliary task
@@ -381,7 +405,8 @@ in our public responses to the three reviewers, each self-contained.
 **1. The discussion-period record.** We understand the metareview
 necessarily reflects the initial reviews. Since it was written we have
 completed more than 230 full-length runs covering every experiment the
-reviewers requested, including all eight of reviewer yGKw's proposed tests.
+reviewers requested, with new experiments addressing all eight of reviewer
+yGKw's questions (incomplete analyses are flagged as such in the responses).
 The headline comparison now stands at 20 seeds per arm in two software
 environments plus a rerun under the exact submitted code and seeds:
 
