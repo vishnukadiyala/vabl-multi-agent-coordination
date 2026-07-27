@@ -18,6 +18,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import jax.flatten_util
 import numpy as np
 import optax
 from flax.training.train_state import TrainState
@@ -49,6 +50,9 @@ def train_vabl_smax(
     seed: int = 0,
     log_interval: int = 50,
     save_path: str = None,
+    log_gradient_decomp: bool = False,
+    grad_log_interval: int = 5,
+    log_policy_kl: bool = False,
 ):
     if config is None:
         config = VABLConfig()
@@ -191,9 +195,66 @@ def train_vabl_smax(
         loss, grads = jax.value_and_grad(loss_fn)(critic_state.params)
         return critic_state.apply_gradients(grads=grads), loss
 
+    @jax.jit
+    def compute_separate_gradients(
+        params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+        flat_actions, flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff, vae_rng,
+    ):
+        """Policy-only and aux-only gradients: norms, between-task cosine, and
+        the flattened vectors (for host-side self-cosine tracking). Mirrors
+        train_vabl_vec.py; added for the rebuttal SMAX E[cos] analysis."""
+        def policy_only_loss(p):
+            flat_logits, _, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+            B = flat_actions.shape[0]
+            logits = flat_logits.reshape(B, n_agents, n_actions)
+            lp = jax.nn.log_softmax(logits)
+            nlp = jnp.take_along_axis(lp, flat_actions[..., None], axis=-1).squeeze(-1).sum(axis=-1)
+            ratio = jnp.clip(jnp.exp(nlp - old_lp_sum), 0.0, 5.0)
+            s1 = ratio * advantages_flat
+            s2 = jnp.clip(ratio, 1 - config.clip_param, 1 + config.clip_param) * advantages_flat
+            p_loss = -jnp.minimum(s1, s2).mean()
+            pr = jax.nn.softmax(logits)
+            ent = -(pr * lp).sum(axis=-1).mean(axis=-1)
+            return p_loss - config.entropy_coef * ent.mean()
+
+        def aux_only_loss(p):
+            _, flat_aux, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+            aux_lp = jax.nn.log_softmax(flat_aux, axis=-1)
+            aux_taken = jnp.take_along_axis(
+                aux_lp, flat_next_t_actions[..., None], axis=-1).squeeze(-1)
+            return aux_lambda_eff * (-aux_taken.mean())
+
+        g_policy = jax.grad(policy_only_loss)(params)
+        g_aux = jax.grad(aux_only_loss)(params)
+        flat_gp, _ = jax.flatten_util.ravel_pytree(g_policy)
+        flat_ga, _ = jax.flatten_util.ravel_pytree(g_aux)
+        norm_p = jnp.linalg.norm(flat_gp)
+        norm_a = jnp.linalg.norm(flat_ga)
+        cos = jnp.sum(flat_gp * flat_ga) / (norm_p * norm_a + 1e-12)
+        return norm_p, norm_a, cos, flat_gp, flat_ga
+
+    @jax.jit
+    def compute_policy_kl(params_new, params_old, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng):
+        logits_new, _, _ = compute_logits_and_aux(
+            params_new, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+        logits_old, _, _ = compute_logits_and_aux(
+            params_old, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+        lp_new = jax.nn.log_softmax(logits_new)
+        lp_old = jax.nn.log_softmax(logits_old)
+        return (jnp.exp(lp_new) * (lp_new - lp_old)).sum(axis=-1).mean()
+
     # ---- Training loop ----
     rewards_history = []
     best_reward = float("-inf")
+    # Instrumentation state. side_rng is independent of the main rng stream,
+    # so instrumented runs remain exact replicates of canonical SMAX seeds.
+    side_rng = jax.random.PRNGKey(seed + 777001)
+    prev_iter_params = agent_state.params
+    prev_grad_vecs = None
+    grad_log = []
+    kl_log = []
 
     print("  Starting (compiling on first iteration)...")
     t0 = time.time()
@@ -293,6 +354,40 @@ def train_vabl_smax(
         else:
             aux_lambda_eff = float(config.aux_lambda)
 
+        # Instrumentation (side_rng only; main stream untouched).
+        if log_policy_kl and iteration > 0:
+            side_rng, rng_kl = jax.random.split(side_rng)
+            kl_val = compute_policy_kl(
+                agent_state.params, prev_iter_params, flat_obs, flat_beliefs,
+                flat_t_oh, flat_t_idx, rng_kl)
+            kl_log.append({"iteration": int(iteration), "policy_kl": float(kl_val)})
+        prev_iter_params = agent_state.params
+
+        if log_gradient_decomp and (iteration % grad_log_interval == 0):
+            side_rng, rng_gd = jax.random.split(side_rng)
+            np_, na_, co_, gp_vec, ga_vec = compute_separate_gradients(
+                agent_state.params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+                flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
+                jnp.asarray(aux_lambda_eff), rng_gd)
+            gp_np = np.asarray(gp_vec)
+            ga_np = np.asarray(ga_vec)
+            entry = {"iteration": int(iteration), "norm_policy": float(np_),
+                     "norm_aux": float(na_), "cosine": float(co_),
+                     "aux_lambda_eff": float(aux_lambda_eff)}
+            if prev_grad_vecs is not None:
+                pgp, pga = prev_grad_vecs
+                denom_p = float(np.linalg.norm(gp_np) * np.linalg.norm(pgp) + 1e-12)
+                denom_a = float(np.linalg.norm(ga_np) * np.linalg.norm(pga) + 1e-12)
+                entry["policy_self_cos"] = float(np.dot(gp_np, pgp) / denom_p)
+                entry["aux_self_cos"] = float(np.dot(ga_np, pga) / denom_a)
+            prev_grad_vecs = (gp_np, ga_np)
+            # Belief effective rank (participation ratio): representation-
+            # collapse diagnostic for PYCT Q1, measured where they asked.
+            bel = np.asarray(flat_beliefs[:2048])
+            sv = np.linalg.svd(bel, compute_uv=False)
+            entry["belief_effective_rank"] = float((sv.sum() ** 2) / ((sv ** 2).sum() + 1e-12))
+            grad_log.append(entry)
+
         for _ in range(config.ppo_epochs):
             rng, rng_au_vae = jax.random.split(rng)
             agent_state, a_loss = actor_update(
@@ -327,7 +422,12 @@ def train_vabl_smax(
             "environment": f"smax_{num_allies}v{num_enemies}",
             "horizon": horizon, "n_envs": n_envs, "n_episodes": n_episodes,
             "seed": seed, "vabl_version": "v2",
+            "log_gradient_decomp": bool(log_gradient_decomp),
+            "grad_log_interval": int(grad_log_interval),
+            "log_policy_kl": bool(log_policy_kl),
         },
+        "gradient_decomp": grad_log,
+        "policy_kl": kl_log,
     }
 
     if save_path:
@@ -354,6 +454,9 @@ if __name__ == "__main__":
     parser.add_argument("--aux-lambda", type=float, default=0.05)
     parser.add_argument("--stop-gradient-belief", action="store_true")
     parser.add_argument("--aux-anneal-fraction", type=float, default=0.0)
+    parser.add_argument("--log-gradient-decomp", action="store_true")
+    parser.add_argument("--grad-log-interval", type=int, default=5)
+    parser.add_argument("--log-policy-kl", action="store_true")
     args = parser.parse_args()
 
     base_config = VABLConfig()._replace(
@@ -370,4 +473,7 @@ if __name__ == "__main__":
         n_episodes=args.episodes, horizon=args.horizon,
         n_envs=args.n_envs, seed=args.seed, log_interval=args.log_interval,
         save_path=args.save,
+        log_gradient_decomp=args.log_gradient_decomp,
+        grad_log_interval=args.grad_log_interval,
+        log_policy_kl=args.log_policy_kl,
     )
