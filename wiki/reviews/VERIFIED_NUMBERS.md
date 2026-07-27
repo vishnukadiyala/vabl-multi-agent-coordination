@@ -495,3 +495,17 @@ restores No-Aux-level performance while RETAINING the auxiliary task, with
 zero sub-460 runs across the design family; this is a root-cause,
 target-level intervention. Label directional at n=5; do not claim the full
 spectrum is monotone.
+
+## 3j. V2 SUPPLEMENTARY PHASES (rebuilt env, complete 2026-07-26 night)
+
+Directional, for cross-checking only (the rebuttal quotes the original-env
+versions; nothing here contradicts it, two things reinforce it):
+- frozen n=10: 468.02 +/- 2.30, 0 sub-460 (stationary arms stay clean on the
+  second environment; shielded/stationary census extends 0/80 -> 0/95).
+- Continuum: lag1 467.68 +/- 2.25, lag25 466.69 +/- 3.91, lag100 466.39 +/-
+  5.79 (1 sub-460), lagfrozen 471.22 +/- 2.67. Frozen endpoint best AGAIN;
+  interior counter-directional again; the mid-lag drifting arm produced the
+  only low run in BOTH environments.
+- SMAX: full 10.93 +/- 0.45, no_aux 10.64 +/- 0.48, stopgrad 10.45 +/- 0.59.
+  Gap sign flipped again (third batch): SMAX instability confirmed on a
+  second environment.

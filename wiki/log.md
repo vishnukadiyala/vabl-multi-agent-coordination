@@ -1064,3 +1064,8 @@ schedules, R12 rank, R13 EMA incl. the weaker 0.99 arm after a selective-
 reporting catch). Verified: 0 em-dashes, all key figures present via
 fixed-string sweep, significant/directional labeling per pre-registered
 rule, run-count floor 230+ (239 by count). READY FOR ATIQ. Deadline today.
+
+## [2026-07-27] update | V2 supplementary phases complete; no contradictions; campaign CLOSED
+All 85 V2 runs done. Frozen stays clean (0 sub-460, n=10), frozen continuum
+endpoint best again (471.22), SMAX gap flips sign again. Rebuttal text
+unaffected; two claims independently reinforced. Total campaign: 324 runs.
