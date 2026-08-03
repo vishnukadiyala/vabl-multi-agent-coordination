@@ -95,6 +95,7 @@ def train_vabl_vec(
     log_gradient_decomp: bool = False,
     grad_log_interval: int = 25,
     log_policy_kl: bool = False,
+    log_feature_drift: bool = False,
     aux_snapshot_refresh: int = 0,
     aux_soft_targets: bool = False,
     grad_surgery: str = "none",
@@ -363,6 +364,23 @@ def train_vabl_vec(
         lp_old = jax.nn.log_softmax(logits_old)
         p_new = jnp.exp(lp_new)
         return (p_new * (lp_new - lp_old)).sum(axis=-1).mean()
+
+    @jax.jit
+    def compute_probe_features(params, probe_obs, probe_beliefs, probe_t_oh, probe_t_idx, vae_rng):
+        """Encoder representation (new_belief, the input to the aux head) on a
+        FIXED probe batch. Feature drift between consecutive logged iterations
+        measures representation drift directly (yGKw final comment): the same
+        inputs, changing parameters. vae_rng is held constant across calls so
+        the comparison is purely parameter-driven.
+        """
+        def forward_one(idx, obs_i, belief_i, t_oh_i, t_idx_i):
+            rng_i = jax.random.fold_in(vae_rng, idx)
+            _, new_b, _, _ = agent_net.apply(
+                params, obs_i, belief_i, t_oh_i, t_idx_i, jnp.ones(n_teammates),
+                rngs={"vae": rng_i})
+            return new_b
+        idx = jnp.arange(probe_obs.shape[0])
+        return jax.vmap(forward_one)(idx, probe_obs, probe_beliefs, probe_t_oh, probe_t_idx)
 
     @jax.jit
     def snapshot_policy_probs(lag_params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng):
@@ -642,6 +660,14 @@ def train_vabl_vec(
     gn_w_policy, gn_w_aux = 1.0, 1.0
     GN_LR = 0.025  # GradNorm weight learning rate (Chen et al. 2018)
     prev_grad_vecs = None  # (g_policy, g_aux) at the previous logged iteration
+    # Feature-drift probe state (yGKw final comment). Probe inputs are frozen
+    # at the first logged iteration; the vae key is a fixed constant so probe
+    # features change only through the parameters.
+    probe_inputs = None
+    prev_probe_feats = None
+    feat_log = []  # {iteration, feat_self_cos, feat_rel_l2}
+    PROBE_VAE_RNG = jax.random.PRNGKey(seed + 888001)
+    PROBE_SIZE = 1024
 
     print("  Starting (compiling on first iteration)...")
     t0 = time.time()
@@ -961,6 +987,39 @@ def train_vabl_vec(
                         np.linalg.norm(ga_pert - ga_np) / (np.linalg.norm(ga_np) + 1e-12))
             grad_log.append(entry)
 
+        # Representation-drift probe (yGKw final comment, 2026-08-02): drift
+        # of the aux head's input representation on fixed probe inputs, at the
+        # same cadence as the gradient decomposition. Captured across ALL
+        # conditions (Full / frozen / No-Aux) so the common-mode claim is
+        # measured, not asserted.
+        if log_feature_drift and (iteration % grad_log_interval == 0):
+            if probe_inputs is None:
+                pick = np.linspace(0, flat_obs.shape[0] - 1, PROBE_SIZE).astype(int)
+                probe_inputs = (
+                    jnp.asarray(np.asarray(flat_obs)[pick]),
+                    jnp.asarray(np.asarray(flat_beliefs)[pick]),
+                    jnp.asarray(np.asarray(flat_t_oh)[pick]),
+                    jnp.asarray(np.asarray(flat_t_idx)[pick]),
+                )
+            feats = np.asarray(compute_probe_features(
+                agent_state.params, *probe_inputs, PROBE_VAE_RNG))
+            if prev_probe_feats is not None:
+                a, b = feats.ravel(), prev_probe_feats.ravel()
+                denom = float(np.linalg.norm(a) * np.linalg.norm(b) + 1e-12)
+                rel_l2 = float(np.linalg.norm(a - b) / (np.linalg.norm(b) + 1e-12))
+                # Per-sample cosine mean: less dominated by high-norm samples
+                # than the global flattened cosine; report both.
+                num = (feats * prev_probe_feats).sum(axis=1)
+                den = (np.linalg.norm(feats, axis=1)
+                       * np.linalg.norm(prev_probe_feats, axis=1) + 1e-12)
+                feat_log.append({
+                    "iteration": int(iteration),
+                    "feat_self_cos": float(np.dot(a, b) / denom),
+                    "feat_self_cos_mean": float((num / den).mean()),
+                    "feat_rel_l2": rel_l2,
+                })
+            prev_probe_feats = feats
+
         # PPO epochs. Dispatch order: soft targets > gradient surgery >
         # drift gate > canonical. The rng split is identical in every branch
         # so the canonical path's rng stream is unchanged by the new modes.
@@ -1075,6 +1134,7 @@ def train_vabl_vec(
         "config": cfg_record,
         "gradient_decomp": grad_log,  # [] if disabled
         "policy_kl": kl_log,          # [] if disabled
+        "feature_drift": feat_log,    # [] if disabled
         "drift_gate": gate_log,       # [] if disabled
         "gradnorm_weights": gn_log,   # [] if disabled
     }
@@ -1131,6 +1191,9 @@ if __name__ == "__main__":
     parser.add_argument("--grad-log-interval", type=int, default=25,
                         help="If --log-gradient-decomp, log every N iterations.")
     # Rebuttal instrumentation (2026-07-24).
+    parser.add_argument("--log-feature-drift", action="store_true",
+                        help="Log encoder-representation drift on a fixed probe batch "
+                             "(yGKw final comment), at --grad-log-interval cadence")
     parser.add_argument("--log-policy-kl", action="store_true",
                         help="Log per-iteration consecutive-policy KL on visited states "
                              "(direct Sigma_pi drift measurement).")
@@ -1194,6 +1257,7 @@ if __name__ == "__main__":
         log_gradient_decomp=args.log_gradient_decomp,
         grad_log_interval=args.grad_log_interval,
         log_policy_kl=args.log_policy_kl,
+        log_feature_drift=args.log_feature_drift,
         aux_snapshot_refresh=args.aux_snapshot_refresh,
         aux_soft_targets=args.aux_soft_targets,
         grad_surgery=args.grad_surgery,

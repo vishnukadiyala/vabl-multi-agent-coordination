@@ -112,6 +112,8 @@ Last updated: 2026-05-07
 - [ICML Rebuttal](reviews/icml_rebuttal.md) — 4 reviewers, concerns, responses, evidence mapping
 - [Rebuttal Round 2 Draft](reviews/rebuttal_round2_draft.md) — Draft response with placeholders for pending results
 - [NeurIPS 2026 Rebuttal Plan](reviews/neurips2026_rebuttal_plan.md) — *(NEW 2026-07-24)* Scores 4/4/3 + AC meta leaning reject; per-reviewer strategy, cross-cutting asks, compute triage. Raw reviews: `raw/reviews/neurips2026_reviews.md`
+- [yGKw Final Comment](reviews/neurips2026_final_comment_yGKw.md) — *(NEW 2026-08-03)* Post-rebuttal objections: representation drift under fixed labels + MPE boundary underived; both conceded with measured counters
+- [yGKw Reply Draft](reviews/neurips2026_final_comment_reply_draft.md) — *(NEW 2026-08-03)* Two-paragraph concession reply, numbers verified, ready to post
 
 ---
 

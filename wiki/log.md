@@ -1069,3 +1069,5 @@ rule, run-count floor 230+ (239 by count). READY FOR ATIQ. Deadline today.
 All 85 V2 runs done. Frozen stays clean (0 sub-460, n=10), frozen continuum
 endpoint best again (471.22), SMAX gap flips sign again. Rebuttal text
 unaffected; two claims independently reinforced. Total campaign: 324 runs.
+
+## [2026-08-03] ingest | yGKw final comment (2026-08-02): representation-drift and MPE-boundary objections; analysis + reply draft filed
