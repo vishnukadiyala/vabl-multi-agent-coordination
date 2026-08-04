@@ -509,3 +509,27 @@ versions; nothing here contradicts it, two things reinforce it):
 - SMAX: full 10.93 +/- 0.45, no_aux 10.64 +/- 0.48, stopgrad 10.45 +/- 0.59.
   Gap sign flipped again (third batch): SMAX instability confirmed on a
   second environment.
+
+## 10. R15 + R16, yGKw final comment (complete 2026-08-03)
+
+Verified via scripts/analyze_R15_R16.py; late window = last 20% of entries.
+
+R15 MPE Sigma_pi (results/R15_mpe_kl, n=5/arm, reruns reproduce canonical
+finals):
+- full: Final -18.63 +/- 0.39; late KL 5.46e-3 +/- 0.93e-3 (2.18x AA band)
+- no_aux: Final -19.67 +/- 0.98; late KL 6.73e-3 +/- 1.04e-3 (2.69x AA band)
+- KL RISES over training (3.2e-3 early -> 5.4e-3 late). FALSIFIES the
+  "slow symmetric drift => small Sigma_pi" attribution for the MPE null.
+- Caveat when quoting: per-update batch 1600 steps vs 25600 on AA.
+
+R16 representation-drift probe (results/R16_repdrift, AA 10M, n=5/arm,
+probe = fixed 1024 states, cadence 5 iters):
+- feat self-cos late: full 0.9908 +/- 0.0021, frozen 0.9851 +/- 0.0012,
+  no_aux 0.9915 +/- 0.0009 -> common-mode; frozen drifts slightly MORE.
+- feat rel-L2 late: full 0.131, frozen 0.169, no_aux 0.127.
+- Finals: full 466.84 +/- 5.95, frozen 470.56 +/- 1.06, no_aux 470.54 +/-
+  1.84 (deficit pattern reproduces, directional n=5).
+- policy KL late: 2.37/2.70/2.56e-3 (matches R1 band).
+- DO NOT quote R16 aux self-cos (~0 both arms; hard-target limitation, see
+  section 8; the arm-separating self-cosine is R3's soft-target 0.974 vs
+  0.79-0.86).

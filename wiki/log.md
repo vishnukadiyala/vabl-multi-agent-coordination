@@ -1071,3 +1071,5 @@ endpoint best again (471.22), SMAX gap flips sign again. Rebuttal text
 unaffected; two claims independently reinforced. Total campaign: 324 runs.
 
 ## [2026-08-03] ingest | yGKw final comment (2026-08-02): representation-drift and MPE-boundary objections; analysis + reply draft filed
+
+## [2026-08-03] ingest | R15 (MPE Sigma_pi, falsifies slow-drift attribution) + R16 (representation drift common-mode) complete; reply draft updated with measured numbers
