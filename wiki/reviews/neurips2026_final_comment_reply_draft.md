@@ -4,81 +4,88 @@ status: active
 related: [neurips2026_final_comment_yGKw, r15_r16_final_comment, VERIFIED_NUMBERS]
 ---
 
-# Draft Reply to yGKw Final Comment (for OpenReview)
+# Final Reply to yGKw (defense register) — v3, 2026-08-03 late
 
-REVISED 2026-08-03 after R15 + R16 completed. All numbers verified against
-`scripts/analyze_R15_R16.py` output on `results/R15_mpe_kl/` and
-`results/R16_repdrift/`, and VERIFIED_NUMBERS.md section 5 (R3 soft-target
-self-cosines). No em-dashes. Ready to paste after Vishnu's review.
+Strategy: defend Proposition 1 (three-factor product), concede exactly two
+textual items (appendix "Sigma_eps = 0" sentence; intro "slow symmetric
+drift" clause). R16 framed as a passed adversarial test, not a concession.
+R15's Sigma_pi falsification scoped to the intro shorthand, not the theory.
+R17 (J_pi on MPE) running; upgrade the marked sentence if it lands before
+posting. All numbers verified (VERIFIED_NUMBERS sections 3g, 5, 10).
 
 ---
 
-Thank you for the close reading. Both points are correct. We ran two new
-experiments against them; one measurement supports the framing you pushed us
-toward, and the other falsified our own wording, which we report and will
-correct.
+Thank you for the close reading. We ran new measurements against both
+points. The first identifies a term our model does not carry; measurement
+shows it is real but common-mode and non-causal. The second led us to
+measure the quantity behind our boundary sentence; the measurement shows
+the sentence attributed the boundary to the wrong factor, which we correct
+below.
 
-**On representation drift under fixed labels.** You are right: fixing the
-auxiliary labels does not make the auxiliary gradient stationary, because
-the shared encoder keeps updating under the RL loss, and our causal chain
-never named this term. The quantity Sigma_eps = J_pi Sigma_pi J_pi^T in our
-model is the target-drift component of auxiliary-gradient variability, not
-the total, and the appendix sentence stating that Sigma_pi = 0 implies
-Sigma_eps = 0 overstates this. We have now measured the omitted term. We
-reran Full, frozen-target, and No-Aux (5 seeds each, 10M steps, Overcooked
-AA) while tracking the aux head's input representation on a fixed probe
-batch of 1024 states. Late-training representation drift is present and
-common-mode across all three arms: consecutive-measurement feature
-self-cosine 0.9908 +/- 0.0021 (Full), 0.9851 +/- 0.0012 (frozen), 0.9915
-+/- 0.0009 (No-Aux). The frozen arm drifts slightly more in representation
-space than Full, yet reproduces neither the deficit nor the low-outcome
-tail (frozen 470.6 +/- 1.1 vs Full 466.8 +/- 6.0 in these reruns). So
-representation drift is real, but it is shared by conditions that do and do
-not exhibit the pathology, while label drift separates them; under matched
+**On representation drift under fixed labels.** The observation is correct:
+fixing the auxiliary labels does not make the auxiliary gradient
+stationary, because the shared encoder continues to update under the RL
+loss. In the model, Sigma_eps = J_pi Sigma_pi J_pi^T is by construction the
+target-drift component of auxiliary-gradient variability, and the
+experimental contrasts are designed to difference the remaining terms out:
+representation drift is present in every arm, including No-Aux and frozen.
+We have now measured it rather than assuming it. Rerunning Full,
+frozen-target, and No-Aux (5 seeds each, 10M steps, Overcooked AA) while
+tracking the aux head's input representation on a fixed probe batch of 1024
+states, late-training feature self-cosine is 0.9908 +/- 0.0021 (Full),
+0.9851 +/- 0.0012 (frozen), and 0.9915 +/- 0.0009 (No-Aux). Representation
+drift is common-mode, and the frozen arm, which drifts slightly more in
+representation space than Full, reproduces neither the deficit nor the
+low-outcome tail (frozen 470.6 +/- 1.1 vs Full 466.8 +/- 6.0 in these
+reruns). Label drift, by contrast, does separate the arms: under matched
 soft labels the auxiliary gradient's iteration-to-iteration self-cosine is
-0.974 with frozen targets against 0.79 to 0.86 with drifting targets. The
-camera-ready will state the decomposition explicitly: a target-drift term
-(modeled) plus a representation-drift term (unmodeled, now measured, common
-to all conditions), and will correct the "Sigma_eps = 0" sentence to "the
-target-drift component of Sigma_eps vanishes."
+0.974 with frozen targets against 0.79 to 0.86 with drifting targets. So
+the term you identify exists, is now measured, and is shared by conditions
+with and without the pathology, which is exactly what licenses treating the
+frozen condition as the Sigma_pi = 0 contrast. The camera-ready will make
+the decomposition explicit (a target-drift term, modeled, plus a
+representation-drift term, measured and common-mode) and will correct the
+appendix sentence "Sigma_eps = 0" to "the target-drift component of
+Sigma_eps vanishes."
 
-**On the MPE simple_spread boundary.** Correct, and the measurement you
-asked for made this concession stronger than you may have expected. There
-is no derivation behind "symmetric slow drift"; it was a hypothesis, and we
-had never measured Sigma_pi on MPE. We have now instrumented MPE
-simple_spread with the same consecutive-policy KL measurement used on
-Overcooked and rerun the original ablation arms (5 seeds each; reruns
-reproduce the original returns). The result falsifies our attribution:
-late-training per-update drift on MPE is 5.5e-3 +/- 0.9e-3 nats (Full) and
-6.7e-3 +/- 1.0e-3 (No-Aux), roughly 2.2 to 2.7 times HIGHER than the
-Overcooked reference band (2.42 to 2.58e-3), and it rises over training
-rather than decaying. (One comparability caveat: MPE's per-update batch is
-1600 steps versus 25600 on Overcooked, so some of the additional movement
-may be batch-noise-driven; either way, per-update drift there is not
-small.) MPE's policy is not slowly drifting, yet the pathology is absent.
-The camera-ready will therefore withdraw the "slow symmetric drift"
-explanation entirely and report the MPE null as an open boundary case: the
-model's noise term Sigma_eps = J_pi Sigma_pi J_pi^T leaves a small pathway
-sensitivity J_pi or a well-conditioned landscape (large lambda_min(H)) as
-candidate explanations, and we have not measured either on MPE. The
-prediction (a) statement and the introduction's boundary sentence will be
-rescoped accordingly, with no generality claim over symmetric cooperative
-games. This correction came from running the measurement your review asked
-for, and we think the paper is more accurate for it.
+**On the MPE simple_spread boundary.** Here your comment exposed a real
+error, and we want to be precise about what the error is. Proposition 1's
+instability condition is a three-factor product, alpha^2 tr(Sigma_eps) /
+lambda_min(H) with Sigma_eps = J_pi Sigma_pi J_pi^T; the introduction's
+boundary sentence compressed this to one factor ("slow symmetric drift,"
+i.e., small Sigma_pi), with no derivation, as you note. We have now
+measured that factor. Instrumenting MPE simple_spread with the same
+consecutive-policy KL measurement used on Overcooked (5 seeds per arm;
+reruns reproduce the original returns), late-training per-update drift is
+5.5e-3 +/- 0.9e-3 nats (Full) and 6.7e-3 +/- 1.0e-3 (No-Aux), roughly 2.2
+to 2.7 times higher than the Overcooked reference band (2.42 to 2.58e-3),
+not lower. (One caveat: MPE's per-update batch is 1600 steps versus 25600
+on Overcooked, so some of the additional movement may be batch-noise
+driven; either way, Sigma_pi there is not small.) The intro sentence is
+therefore withdrawn: Sigma_pi does not carry the MPE boundary. What this
+measurement does not contradict is the proposition itself, which bounds the
+product rather than Sigma_pi alone; the MPE null is consistent with the
+theory if the pathway sensitivity J_pi or the curvature lambda_min(H)
+compensates there. [UPGRADE SLOT: J_pi sentence from R17 when available.]
+The camera-ready will (1) rescope the introduction and prediction (a) so
+the boundary claim is stated on the product, keeping the
+supervised-stationary clause that CIFAR-100 tests and removing the
+"symmetric slow drift" clause, (2) report the MPE Sigma_pi measurement, and
+(3) report the corresponding J_pi measurement on MPE (the target-
+perturbation estimator from your Q3), or, if that does not resolve the
+boundary, report MPE as an open boundary case. Your comment converted an
+unexamined attribution into a measurement, and the boundary section will be
+more accurate for it.
 
 ---
 
-## Notes for Vishnu (not part of the reply)
+## Notes for Vishnu
 
-- Numbers: R16 feature self-cos and finals from analyze_R15_R16.py on
-  results/R16_repdrift; R15 KL from results/R15_mpe_kl; 0.974 / 0.79-0.86
-  from R3 (VERIFIED_NUMBERS section 5, soft targets).
-- Do NOT cite R16's aux self-cosine (~0 in both arms under hard targets;
-  known soft-target-only diagnostic, VERIFIED_NUMBERS section 8).
-- The MPE result changes the PAPER, not just the reply: intro line ~155
-  ("as the principle predicts"), prediction (a) line ~462 ("symmetric slow
-  drift"), Table row commentary ~735, and the Fig 8e "MPE analog" framing
-  all need the camera-ready rescope.
-- Full/frozen/no_aux finals in R16 reproduce the deficit pattern at n=5
-  (directional). Frozen-drifts-more-than-Full is a nice touch: it forecloses
-  "the frozen arm just moves less" as an alternative reading.
+- If R17 lands before posting: replace the UPGRADE SLOT with the measured
+  comparison (AA references: J_pi response 2.47 at eps=0.1; aux/policy
+  norm ratio 0.145 +/- 0.018) and, if favorable, tighten item (3) to a
+  report of the number. If unfavorable, delete the slot and keep item (3)'s
+  open-case fallback; do NOT claim the product is small without the number.
+- Numbers: R16 (VERIFIED_NUMBERS section 10), R15 (section 10), R3
+  soft-target self-cosines (section 5), R8 J_pi AA reference (section 3g).
+- Do not quote R16 aux self-cos (hard-target ~0, section 8 caveat).

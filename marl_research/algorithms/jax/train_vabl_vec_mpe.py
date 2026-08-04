@@ -25,6 +25,7 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
+import jax.flatten_util
 import numpy as np
 import optax
 from flax.training.train_state import TrainState
@@ -56,7 +57,12 @@ def train_vabl_mpe(
     log_interval: int = 100,
     save_path: str = None,
     log_policy_kl: bool = False,
+    log_gradient_decomp: bool = False,
+    grad_log_interval: int = 25,
+    log_jpi: bool = False,
 ):
+    if log_jpi:
+        assert log_gradient_decomp, "--log-jpi rides on the gradient-decomp logging points"
     if config is None:
         config = VABLConfig()
 
@@ -206,6 +212,52 @@ def train_vabl_mpe(
         return (p_new * (lp_new - lp_old)).sum(axis=-1).mean()
 
     @jax.jit
+    def compute_separate_gradients(
+        params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+        flat_actions, flat_next_t_actions, old_lp_sum, advantages_flat, aux_lambda_eff, vae_rng,
+    ):
+        """Policy-only and aux-only gradients, ported from train_vabl_vec.py.
+
+        Feeds the J_pi target-perturbation estimator and the aux/policy
+        gradient-norm ratio on MPE, so the pathway-sensitivity factor of
+        Sigma_eps = J_pi Sigma_pi J_pi^T can be compared against the
+        Overcooked AA measurements (yGKw Q3 / final comment).
+        """
+        def policy_only_loss(p):
+            flat_logits, _ = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+            B = flat_actions.shape[0]
+            logits = flat_logits.reshape(B, n_agents, n_actions)
+            lp = jax.nn.log_softmax(logits)
+            nlp = jnp.take_along_axis(lp, flat_actions[..., None], axis=-1).squeeze(-1).sum(axis=-1)
+            ratio = jnp.clip(jnp.exp(nlp - old_lp_sum), 0.0, 5.0)
+            s1 = ratio * advantages_flat
+            s2 = jnp.clip(ratio, 1 - config.clip_param, 1 + config.clip_param) * advantages_flat
+            p_loss = -jnp.minimum(s1, s2).mean()
+            pr = jax.nn.softmax(logits)
+            ent = -(pr * lp).sum(axis=-1).mean(axis=-1)
+            e_loss = -ent.mean()
+            return p_loss + config.entropy_coef * e_loss
+
+        def aux_only_loss(p):
+            _, flat_aux = compute_logits_and_aux(
+                p, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx, vae_rng)
+            aux_lp = jax.nn.log_softmax(flat_aux, axis=-1)
+            aux_taken = jnp.take_along_axis(
+                aux_lp, flat_next_t_actions[..., None], axis=-1).squeeze(-1)
+            aux_loss = -aux_taken.mean()
+            return aux_lambda_eff * aux_loss
+
+        g_policy = jax.grad(policy_only_loss)(params)
+        g_aux = jax.grad(aux_only_loss)(params)
+        flat_gp, _ = jax.flatten_util.ravel_pytree(g_policy)
+        flat_ga, _ = jax.flatten_util.ravel_pytree(g_aux)
+        norm_p = jnp.linalg.norm(flat_gp)
+        norm_a = jnp.linalg.norm(flat_ga)
+        cos = jnp.sum(flat_gp * flat_ga) / (norm_p * norm_a + 1e-12)
+        return norm_p, norm_a, cos, flat_gp, flat_ga
+
+    @jax.jit
     def critic_update(critic_state, flat_states, flat_returns):
         def loss_fn(params):
             vals = jax.vmap(lambda s: critic_net.apply(params, s))(flat_states)
@@ -218,6 +270,8 @@ def train_vabl_mpe(
     best_reward = float("-inf")
     prev_iter_params = agent_state.params  # for consecutive-policy KL
     kl_log = []  # {iteration, policy_kl}
+    grad_log = []  # {iteration, norm_policy, norm_aux, cosine, jpi_rel_eps*}
+    prev_grad_vecs = None  # (g_policy, g_aux) at the previous logged iteration
     # Independent stream for instrumentation + inert VAE draws, so nothing
     # here consumes from the canonical rng sequence (same isolation rule as
     # train_vabl_vec.py).
@@ -330,6 +384,50 @@ def train_vabl_mpe(
             kl_log.append({"iteration": int(iteration), "policy_kl": float(kl_val)})
         prev_iter_params = agent_state.params
 
+        # Gradient decomposition + J_pi estimator (same placement as
+        # train_vabl_vec.py: before the PPO epochs, at the pre-update params).
+        if log_gradient_decomp and (iteration % grad_log_interval == 0):
+            side_rng, rng_gd = jax.random.split(side_rng)
+            np_, na_, co_, gp_vec, ga_vec = compute_separate_gradients(
+                agent_state.params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+                flat_actions, flat_next_t_actions, old_lp_sum_flat, advantages_flat,
+                jnp.asarray(aux_lambda_eff), rng_gd)
+            gp_np = np.asarray(gp_vec)
+            ga_np = np.asarray(ga_vec)
+            entry = {
+                "iteration": int(iteration),
+                "norm_policy": float(np_),
+                "norm_aux": float(na_),
+                "cosine": float(co_),
+                "aux_lambda_eff": float(aux_lambda_eff),
+            }
+            if prev_grad_vecs is not None:
+                pgp, pga = prev_grad_vecs
+                denom_p = float(np.linalg.norm(gp_np) * np.linalg.norm(pgp) + 1e-12)
+                denom_a = float(np.linalg.norm(ga_np) * np.linalg.norm(pga) + 1e-12)
+                entry["policy_self_cos"] = float(np.dot(gp_np, pgp) / denom_p)
+                entry["aux_self_cos"] = float(np.dot(ga_np, pga) / denom_a)
+            prev_grad_vecs = (gp_np, ga_np)
+            # J_pi finite-difference estimator (identical protocol to the AA
+            # measurement: flip each target to a random action with prob eps,
+            # measure relative aux-gradient response; same vae rng reused so
+            # the response is purely target-driven).
+            if log_jpi and float(np.linalg.norm(ga_np)) > 0:
+                for eps in (0.05, 0.1, 0.2):
+                    side_rng, r_flip, r_act = jax.random.split(side_rng, 3)
+                    flip = jax.random.bernoulli(r_flip, eps, flat_next_t_actions.shape)
+                    rand_a = jax.random.randint(
+                        r_act, flat_next_t_actions.shape, 0, n_actions, dtype=jnp.int32)
+                    pert = jnp.where(flip, rand_a, flat_next_t_actions)
+                    _n1, _n2, _c, _gp2, ga_pert = compute_separate_gradients(
+                        agent_state.params, flat_obs, flat_beliefs, flat_t_oh, flat_t_idx,
+                        flat_actions, pert, old_lp_sum_flat, advantages_flat,
+                        jnp.asarray(aux_lambda_eff), rng_gd)
+                    ga_pert = np.asarray(ga_pert)
+                    entry[f"jpi_rel_eps{eps}"] = float(
+                        np.linalg.norm(ga_pert - ga_np) / (np.linalg.norm(ga_np) + 1e-12))
+            grad_log.append(entry)
+
         # PPO epochs
         for _ in range(config.ppo_epochs):
             side_rng, rng_upd = jax.random.split(side_rng)
@@ -374,7 +472,8 @@ def train_vabl_mpe(
         "best_reward": best_reward,
         "elapsed": elapsed,
         "config": cfg_record,
-        "policy_kl": kl_log,  # [] if disabled
+        "policy_kl": kl_log,        # [] if disabled
+        "gradient_decomp": grad_log,  # [] if disabled
     }
 
     if save_path:
@@ -402,6 +501,11 @@ if __name__ == "__main__":
     parser.add_argument("--aux-anneal-fraction", type=float, default=0.0)
     parser.add_argument("--log-policy-kl", action="store_true",
                         help="Log consecutive-policy KL (Sigma_pi) every iteration")
+    parser.add_argument("--log-gradient-decomp", action="store_true",
+                        help="Log policy/aux gradient norms + cosines at --grad-log-interval")
+    parser.add_argument("--grad-log-interval", type=int, default=25)
+    parser.add_argument("--log-jpi", action="store_true",
+                        help="J_pi target-perturbation estimator (requires --log-gradient-decomp)")
     args = parser.parse_args()
 
     base_config = VABLConfig()._replace(
@@ -419,4 +523,7 @@ if __name__ == "__main__":
         n_envs=args.n_envs, seed=args.seed, log_interval=args.log_interval,
         save_path=args.save,
         log_policy_kl=args.log_policy_kl,
+        log_gradient_decomp=args.log_gradient_decomp,
+        grad_log_interval=args.grad_log_interval,
+        log_jpi=args.log_jpi,
     )
