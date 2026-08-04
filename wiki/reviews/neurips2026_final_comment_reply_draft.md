@@ -1,10 +1,15 @@
 ---
 tags: [neurips2026, rebuttal, yGKw, draft]
-status: active
+status: archived
 related: [neurips2026_final_comment_yGKw, r15_r16_final_comment, VERIFIED_NUMBERS]
 ---
 
-# Final Reply to yGKw (defense register) — v3, 2026-08-03 late
+# Final Reply to yGKw — POSTED to OpenReview 2026-08-03 (v5, corollary version)
+
+Posted text = v5: impact-first opening, R16 representation-drift paragraph,
+MPE Sigma_pi withdrawal + Corollary (product-form boundary), J_pi described
+as in progress (R17 seed variance made the n=2 numbers unquotable: per-seed
+jpi_rel_eps0.1 = 1.26 / 4.12). No R17 numbers were posted.
 
 Strategy: defend Proposition 1 (three-factor product), concede exactly two
 textual items (appendix "Sigma_eps = 0" sentence; intro "slow symmetric
