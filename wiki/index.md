@@ -94,7 +94,7 @@ Last updated: 2026-05-07
 - [CIFAR-100 5-seed](experiments/cifar_5seed.md) — *(NEW 2026-04-22)* 4-config × 5 seeds supervised null; stationarity prediction confirmed (d = −0.16 on Best, CI crosses 0)
 - [Sample-Efficiency Curves](experiments/sample_efficiency.md) — *(DROPPED FROM PAPER 2026-05-06)* 4 configs × 4 budgets × 5 seeds; transient-collapse reading (46% → 3% with budget) contradicted Phase 2's d=+1.40 permanence at 10M; Appendix H + Figure 7 + Table 16 removed; raw data preserved as historical record
 - [Architecture Sweep](experiments/architecture_sweep.md) — *(COMPLETE)* 60-run component isolation: pathology generalizes across recurrence/attention, absent with mean pool, reversed on critic-aux
-- [R15+R16 Final Comment](experiments/r15_r16_final_comment.md) — *(COMPLETE 2026-08-03)* yGKw final-comment measurements: MPE Sigma_pi (falsifies slow-drift attribution, 2.2-2.7x AA) + representation-drift probe (common-mode across arms)
+- [R15+R16+R17 Final Comment](experiments/r15_r16_final_comment.md) — *(COMPLETE; R17 analyzed 2026-08-25)* yGKw final-comment measurements: MPE Sigma_pi (falsifies slow-drift attribution, 2.2-2.7x AA) + representation-drift probe (common-mode across arms) + MPE J_pi (2.00 +/- 1.00 vs AA 2.47, same order). Neither factor of the product is small on MPE, so the boundary stays a measured open case.
 - [Rebuttal Runs](experiments/rebuttal_runs.md) — *(STALE)* Superseded by Phase 2
 - [Ablation Studies](experiments/ablations.md) — Component-wise analysis of VABL
 - [10M Scaling](experiments/10m_scaling.md) — *(STALE)* Superseded by Phase 2

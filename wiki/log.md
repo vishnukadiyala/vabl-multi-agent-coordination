@@ -1075,3 +1075,13 @@ unaffected; two claims independently reinforced. Total campaign: 324 runs.
 ## [2026-08-03] ingest | R15 (MPE Sigma_pi, falsifies slow-drift attribution) + R16 (representation drift common-mode) complete; reply draft updated with measured numbers
 
 ## [2026-08-03] update | Final reply POSTED to OpenReview (corollary version, no R17 numbers; R17 seeds 2-4 still running for camera-ready)
+
+## [2026-08-25] update | R17 (MPE J_pi, 5 seeds) analyzed: boundary stays open
+All 5 seeds completed 2026-08-03 23:40 but sat unanalyzed. jpi_rel @ eps=0.1
+= 2.001 +/- 1.000 vs AA 2.47 (same order, CV = 0.50 so magnitude unresolved
+at n=5); linearity 3.85 +/- 0.24 with 5/5 seeds in the pre-registered [3, 5]
+band. Combined with R15 (Sigma_pi 2.2-2.7x HIGHER on MPE), neither factor of
+sigma_max(J_pi)^2 tr(Sigma_pi) is small on MPE, so the product framing does
+not explain the boundary. Camera-ready takes the pre-committed fallback:
+MPE as a measured open boundary case. Open check: AA aux/policy norm-ratio
+reference 0.145 normalization is unverifiable locally (R8 JSONs on Celestia).
